@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Quotas</title>
+<meta name="author" content="(Andrey Volkov)"/>
+<style type="text/css">
+.underline { text-decoration: underline; }
+</style>
+
+<!-- If the query includes 'print-pdf', include the PDF print sheet -->
+<script>
+    if( window.location.search.match( /print-pdf/gi ) ) {
+        var link = document.createElement( 'link' );
+        link.rel = 'stylesheet';
+        link.type = 'text/css';
+        link.href = './reveal.js/css/print/pdf.css';
+        document.getElementsByTagName( 'head' )[0].appendChild( link );
+    }
+</script>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+<section id="sec-title-slide">
+<h1>Quotas</h1>
+<h2>Andrey Volkov</h2>
+<h2><a href="mailto:avolkov@mirantis.com">avolkov@mirantis.com</a></h2>
+<h2>2016-10-21</h2>
+</section>
+<section id="table-of-contents">
+<div id="table-of-contents">
+<h2>Table of Contents</h2>
+<div id="text-table-of-contents">
+<ul>
+<li><a href="#/slide-orgheadline1">1. TABLE OF CONTENTS</a></li>
+<li><a href="#/slide-orgheadline2">2. Quotas</a></li>
+<li><a href="#/slide-orgheadline3">3. Systems using quotas</a></li>
+<li><a href="#/slide-orgheadline4">4. Nova limits management</a></li>
+<li><a href="#/slide-orgheadline5">5. Nova limits DB structure</a></li>
+<li><a href="#/slide-orgheadline6">6. Quotas drivers</a></li>
+<li><a href="#/slide-orgheadline7">7. Nova usages</a></li>
+<li><a href="#/slide-orgheadline8">8. Nova usages DB structure</a></li>
+<li><a href="#/slide-orgheadline9">9. Known bugs</a></li>
+<li><a href="#/slide-orgheadline10">10. Nested quotas</a></li>
+<li><a href="#/slide-orgheadline11">11. Nested quotas with overbooking</a></li>
+<li><a href="#/slide-orgheadline12">12. Quotas as a service</a></li>
+</ul>
+</div>
+</div>
+</section>
+
+<section>
+<section id="slide-orgheadline1">
+<h2 id="orgheadline1"><span class="section-number-2">1</span> TABLE OF CONTENTS</h2>
+<p>
+I would like to give short introduction
+about quotas including API and DB architecture of quotas,
+procs and cons of current scheme, known bugs
+and what our team is going to do with quotas.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-orgheadline2">
+<h2 id="orgheadline2"><span class="section-number-2">2</span> Quotas</h2>
+<p>
+Quotas is a mechanism to manage resource limits
+to control usage of particular rousource and 
+to prevent system capacities being exhausted.
+</p>
+
+<p>
+To be clearer I'm going to divide quotas term into two terms:
+</p>
+<ul>
+<li>limits</li>
+<li>usages</li>
+
+</ul>
+
+<p>
+Limits are boundaries managed by an administrator via API.
+Usages are the current state of resource allocations in a system.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-orgheadline3">
+<h2 id="orgheadline3"><span class="section-number-2">3</span> Systems using quotas</h2>
+<p>
+There are a couple of projects in OpenStack
+providing quotas. Each service has own code for limits
+management quite similar to other.
+</p>
+
+<p>
+Fo example nova, neutron
+they provide some interface to create, read, update, delete limits.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-orgheadline4">
+<h2 id="orgheadline4"><span class="section-number-2">4</span> Nova limits management</h2>
+<p>
+There are two entry points for limits: 
+</p>
+<ul>
+<li>managing default limits</li>
+<li>managing project or user limits</li>
+
+</ul>
+
+<p>
+Both are similar and have ability make CRUD operations.
+</p>
+
+<p>
+One interesting argument for quota-class-update 
+is quota class name. It can be only defaut
+and other values have no effect because it's hardcoded
+in nova.
+</p>
+
+<p>
+Information in nova-show inclues default values from quota-defaults.
+There is limits API in which 
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-orgheadline5">
+<h2 id="orgheadline5"><span class="section-number-2">5</span> Nova limits DB structure</h2>
+<p>
+There are three tables in nova with almost similar structure.
+quota_classes for saving default values.
+quotas for saving limits per project.
+project_user_quotas for saving limits per user.
+</p>
+
+<p>
+The structure is very simple.
+You have timestamps, deleted sign, project or user or class, resource
+name and limit value.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-orgheadline6">
+<h2 id="orgheadline6"><span class="section-number-2">6</span> Quotas drivers</h2>
+<p>
+There is a possibility to use a different strategy for quota enforcement.
+It can be chosen in nova conf with quota_driver setting.
+Currently, there are two: DB driver and noop driver I think they are
+self-explanatory.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-orgheadline7">
+<h2 id="orgheadline7"><span class="section-number-2">7</span> Nova usages</h2>
+<p>
+To enforce quotas or to check usages there is quota driver API.
+Most important calls are reserve and commit.
+The reserve call gets resources values delta, create reservations 
+and update reserved value for usage record.
+Commit call decrease reserved value, increase used value
+and soft delete reservation.
+</p>
+
+<p>
+Reservation is available not for all resources, there is different
+type of resources for example metadata_items, injected_files
+for which only absolute limit is checked with limit_check call.
+</p>
+
+<p>
+For CountableResources reservations aren't used also
+instead, the current value is calculated from particular tables
+for example security_group_rules.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-orgheadline8">
+<h2 id="orgheadline8"><span class="section-number-2">8</span> Nova usages DB structure</h2>
+<p>
+The structure is very simple it has only two tables.
+I noticed here only logical structure actually 
+they have additional timestamps, deleted flags.
+</p>
+
+<p>
+Most interesting fields are expire and until_refresh.
+</p>
+
+<p>
+Scheduler has periodic task  called _expire_reservations,
+which finds not finished reservations and removes them.
+Time of expiration is managed in configuration.
+</p>
+
+<p>
+Until_refresh now is just flag which determines
+can we recalculate usages with nova-manage command
+it's defined in configuration and saved in each usage record.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-orgheadline9">
+<h2 id="orgheadline9"><span class="section-number-2">9</span> Known bugs</h2>
+<p>
+There is spec from which we can understand
+that quota enforcement logic can be broken in some places.
+As result, the tool for usage recounting has appeared.
+</p>
+
+<p>
+There are couple of long-lived bugs that implicitly
+say us that something is wrong with quotas now.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-orgheadline10">
+<h2 id="orgheadline10"><span class="section-number-2">10</span> Nested quotas</h2>
+<p>
+Our plan is to modify usage enforcement according 
+to new requirements.
+</p>
+
+<p>
+We have project hierarchy in keystone now and there is
+a will to take into account this hierarchy for 
+limits enforcement.
+</p>
+
+<p>
+The limits enforcement should be done such way
+that not only project usage can't exceed project limit
+but the sum of project usage and subprojects usages 
+can't exceed project limit.
+</p>
+
+<p>
+There is the spec for that proposed in liberty.
+Now we're trying to restore it.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-orgheadline11">
+<h2 id="orgheadline11"><span class="section-number-2">11</span> Nested quotas with overbooking</h2>
+<p>
+The difference from the previous schema is in organization of limits.
+Usages are still checked as before.
+But sum of subprojects <b>limits</b> can be not equal to parent project
+limit.
+</p>
+
+<p>
+This scheme allows eating more for more active projects 
+still having an upper limit in the parent project.
+Such logic requires all project tree traversal and 
+need to be profiled carefully.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-orgheadline12">
+<h2 id="orgheadline12"><span class="section-number-2">12</span> Quotas as a service</h2>
+<p>
+As a lot of duplication of limits management exists in different 
+projects there is an idea to move it to one separated service.
+The first candidate was keystone as it already stores project hierarchy,
+but I heard that not all people in keystone want this.
+</p>
+
+<p>
+One more detail related about quotas is that there is spec
+about moving quotas to API DB, maybe we can skip it
+and just move quotas to separated service.
+</p>
+
+<p>
+It can be completely separated service but as I understand we 
+already have service that can account usages or allocations as it's
+called. So possibly limit management can also be moved to that
+service.
+</p>
+</section>
+</section>
+</div>
+</div>
+
+<script>
+// Full list of configuration options available here:
+// https://github.com/hakimel/reveal.js#configuration
+Reveal.initialize({
+
+controls: true,
+progress: true,
+history: false,
+center: true,
+slideNumber: 'c',
+rollingLinks: false,
+keyboard: true,
+overview: true,
+
+theme: Reveal.getQueryHash().theme, // available themes are in /css/theme
+transition: Reveal.getQueryHash().transition || 'None', // default/cube/page/concave/zoom/linear/fade/none
+transitionSpeed: 'default',
+multiplex: {
+    secret: '', // null if client
+    id: '', // id, obtained from socket.io server
+    url: '' // Location of socket.io server
+},
+
+// Optional libraries used to extend on reveal.js
+dependencies: [
+ { src: './reveal.js/lib/js/classList.js', condition: function() { return !document.body.classList; } },
+ { src: './reveal.js/plugin/markdown/marked.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+ { src: './reveal.js/plugin/markdown/markdown.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+ { src: './reveal.js/plugin/zoom-js/zoom.js', async: true, condition: function() { return !!document.body.classList; } },
+ { src: './reveal.js/plugin/notes/notes.js', async: true, condition: function() { return !!document.body.classList; } }]
+});
+</script>
+</body>
+</html>

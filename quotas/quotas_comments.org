@@ -1,0 +1,159 @@
+#+OPTIONS: ^:nil 
+#+REVEAL_THEME: white
+#+REVEAL_TRANS: None
+#+TITLE: Quotas
+#+DATE: 2016-10-21
+#+AUTHOR: Andrey Volkov
+#+EMAIL: avolkov@mirantis.com
+
+* TABLE OF CONTENTS
+
+I would like to give short introduction
+about quotas including API and DB architecture of quotas,
+procs and cons of current scheme, known bugs
+and what our team is going to do with quotas.
+
+* Quotas 
+
+Quotas is a mechanism to manage resource limits
+to control usage of particular rousource and 
+to prevent system capacities being exhausted.
+
+To be clearer I'm going to divide quotas term into two terms:
+- limits 
+- usages
+
+Limits are boundaries managed by an administrator via API.
+Usages are the current state of resource allocations in a system.
+
+* Systems using quotas
+
+There are a couple of projects in OpenStack
+providing quotas. Each service has own code for limits
+management quite similar to other.
+ 
+Fo example nova, neutron
+they provide some interface to create, read, update, delete limits.
+
+* Nova limits management
+
+There are two entry points for limits: 
+- managing default limits
+- managing project or user limits
+
+Both are similar and have ability make CRUD operations.
+
+One interesting argument for quota-class-update 
+is quota class name. It can be only defaut
+and other values have no effect because it's hardcoded
+in nova.
+
+Information in nova-show inclues default values from quota-defaults.
+There is limits API in which 
+
+* Nova limits DB structure
+
+There are three tables in nova with almost similar structure.
+quota_classes for saving default values.
+quotas for saving limits per project.
+project_user_quotas for saving limits per user.
+
+The structure is very simple.
+You have timestamps, deleted sign, project or user or class, resource
+name and limit value.
+
+* Quotas drivers
+
+There is a possibility to use a different strategy for quota enforcement.
+It can be chosen in nova conf with quota_driver setting.
+Currently, there are two: DB driver and noop driver I think they are
+self-explanatory.
+
+* Nova usages
+
+To enforce quotas or to check usages there is quota driver API.
+Most important calls are reserve and commit.
+The reserve call gets resources values delta, create reservations 
+and update reserved value for usage record.
+Commit call decrease reserved value, increase used value
+and soft delete reservation.
+
+Reservation is available not for all resources, there is different
+type of resources for example metadata_items, injected_files
+for which only absolute limit is checked with limit_check call.
+
+For CountableResources reservations aren't used also
+instead, the current value is calculated from particular tables
+for example security_group_rules.
+
+* Nova usages DB structure
+
+The structure is very simple it has only two tables.
+I noticed here only logical structure actually 
+they have additional timestamps, deleted flags.
+
+Most interesting fields are expire and until_refresh.
+
+Scheduler has periodic task  called _expire_reservations,
+which finds not finished reservations and removes them.
+Time of expiration is managed in configuration.
+
+Until_refresh now is just flag which determines
+can we recalculate usages with nova-manage command
+it's defined in configuration and saved in each usage record.
+
+* Known bugs
+
+There is spec from which we can understand
+that quota enforcement logic can be broken in some places.
+As result, the tool for usage recounting has appeared.
+
+There are couple of long-lived bugs that implicitly
+say us that something is wrong with quotas now.
+
+* Nested quotas
+
+Our plan is to modify usage enforcement according 
+to new requirements.
+
+We have project hierarchy in keystone now and there is
+a will to take into account this hierarchy for 
+limits enforcement.
+
+The limits enforcement should be done such way
+that not only project usage can't exceed project limit
+but the sum of project usage and subprojects usages 
+can't exceed project limit.
+
+There is the spec for that proposed in liberty.
+Now we're trying to restore it.
+
+* Nested quotas with overbooking
+
+The difference from the previous schema is in organization of limits.
+Usages are still checked as before.
+But sum of subprojects *limits* can be not equal to parent project
+limit.
+
+This scheme allows eating more for more active projects 
+still having an upper limit in the parent project.
+Such logic requires all project tree traversal and 
+need to be profiled carefully.
+
+* Quotas as a service
+
+As a lot of duplication of limits management exists in different 
+projects there is an idea to move it to one separated service.
+The first candidate was keystone as it already stores project hierarchy,
+but I heard that not all people in keystone want this.
+
+One more detail related about quotas is that there is spec
+about moving quotas to API DB, maybe we can skip it
+and just move quotas to separated service.
+
+It can be completely separated service but as I understand we 
+already have service that can account usages or allocations as it's
+called. So possibly limit management can also be moved to that
+service.
+
+

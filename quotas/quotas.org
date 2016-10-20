@@ -1,0 +1,130 @@
+#+OPTIONS: ^:nil 
+#+REVEAL_THEME: white
+#+REVEAL_TRANS: None
+#+TITLE: Quotas
+#+DATE: 2016-10-21
+#+AUTHOR: Andrey Volkov
+#+EMAIL: avolkov@mirantis.com
+
+* Quotas
+
+- Quotas:
+  - Resource limit management mechanism.
+  - Usages control and validation mechanism.
+
+* Projects using quotas
+
+- nova
+- neutron
+- cinder
+- glance 
+- ...
+
+* Nova limits management
+
+- Managing default values (quota classes)
+  - nova quota-defaults (read)
+  - nova quota-class-update --instances 15 default 
+
+- Managing per project or per user values
+  - nova quota-show [--tenant] [--user] [--detail] (read)
+  - nova quota-update --floating-ips 20
+
+- Links
+  - [[https://github.com/openstack/nova/blob/9d636ba82401548b37b0bbdd7ad302db592b4361/nova/api/openstack/compute/quota_classes.py#L38][quota_classes.py]]
+  - [[https://github.com/openstack/nova/blob/9d636ba82401548b37b0bbdd7ad302db592b4361/nova/api/openstack/compute/quota_sets.py#L45][quota_sets.py]]
+
+* Nova limits DB structure
+
+- quota_classes (defaults)
+- quotas (per project)
+- project_user_quotas (per user)
+
+** Nova limits table
+
++------------+--------------+------+-----+---------+----------------+
+| Field      | Type         | Null | Key | Default | Extra          |
++------------+--------------+------+-----+---------+----------------+
+| id         | int(11)      | NO   | PRI | NULL    | auto_increment |
+| created_at | datetime     | YES  |     | NULL    |                |
+| updated_at | datetime     | YES  |     | NULL    |                |
+| deleted_at | datetime     | YES  |     | NULL    |                |
+| deleted    | int(11)      | YES  |     | NULL    |                |
+| project_id | varchar(255) | NO   | MUL | NULL    |                |
+| resource   | varchar(255) | NO   |     | NULL    |                |
+| hard_limit | int(11)      | YES  |     | NULL    |                |
++------------+--------------+------+-----+---------+----------------+
+
+* Quotas drivers
+
+- Can be chosen with CONF.quota_driver
+- DbQuotaDriver
+- NoopQuotaDriver
+
+* Nova usages
+
+- API:
+  - QuotaDriver.reserve
+  - QuotaDriver.limit_check
+  - QuotaDriver.commit
+  - QuotaDriver.rollback
+
+- ResourceTypes
+  - ReservableResource
+  - AbsoluteResource
+  - CountableResource
+
+* Nova usages DB structure
+
+- quota_usages
+  - project, user
+  - resource
+  - used
+  - reserved
+  - until_refresh
+
+- reservations
+  - usage_id
+  - delta
+  - expire
+
+* Known bugs
+
+- [[https://specs.openstack.org/openstack/nova-specs/specs/liberty/approved/refresh-quotas-usage.html][refresh-quotas-usage]]
+
+- [[https://bugs.launchpad.net/nova/+bug/1296414][quotas not updated when periodic tasks or startup finish deletes]]
+
+* Nested quotas
+
+#+BEGIN_SRC text
+       /-b, 10.0
+-a, 30.0
+       \-c, 20.0
+
+tree.use('a', {'vm': 10})  # ok
+tree.use('b', {'vm': 10})  # ok
+tree.use('c', {'vm': 20})  
+# fail - ProjectLimitExceed: Exceed in node a, resource vm
+#+END_SRC
+
+* Quotas with limit overbooking
+
+#+BEGIN_SRC text
+       /-b, 20.0
+-a, 30.0
+       \-c, 20.0
+
+tree.use('b', {'vm': 15})  # ok
+tree.use('c', {'vm': 15})  # ok
+tree.use('b', {'vm': 5})  
+# fail - ProjectLimitExceed: Exceed in node a, resource vm
+#+END_SRC
+
+* Quotas as a service
+
+- Quotas limits management is duplicated across projects.
+- Keystone is one of the candidates.
+- Possibly, can be considered as separated service or
+  part of placement API.
+
+* Questions
