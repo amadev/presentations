@@ -1,0 +1,337 @@
+* Hierarchical quotas performance with rally
+
+james - host where devstack's installed
+~/m/devstack  - path for devstack checkout
+
+Install rally.
+
+#+BEGIN_SRC sh :session shell_james
+wget -q -O- https://raw.githubusercontent.com/openstack/rally/master/install_rally.sh | bash
+#+END_SRC
+
+Register deployment.
+
+#+BEGIN_SRC sh :session shell_james
+export IDENTITY_API_VERSION=3
+source ~/m/devstack/openrc admin admin
+~/rally/bin/rally deployment create --fromenv --name=james_devstack
+#+END_SRC
+
+Install user tree plugin.
+
+#+BEGIN_SRC sh :session shell_james
+mkdir -p ~/.rally/plugins
+cd  ~/.rally/plugins
+git clone git@github.com:vvakhlyuev-work/userstree.git
+#+END_SRC
+
+Create cases for ~ 1, 10, 50, 100 tenants.
+Each step has 100 iterations.
+
+- case 1 (2 tenants)
+ - departmental_tenants: 1
+ - childs_per_parent: 1
+ - tree_height: 1
+
+- case 2 (13 tenants)
+ - departmental_tenants: 1
+ - childs_per_parent: 3
+ - tree_height: 3
+
+- case 3 (57 tenants)
+ - departmental_tenants: 1
+ - childs_per_parent: 7
+ - tree_height: 3
+
+- case 4 (121 tenants)
+ - departmental_tenants: 1
+ - childs_per_parent: 3
+ - tree_height: 5
+
+#+NAME: cases
+#+BEGIN_SRC text
+{
+    "NovaServers.boot_and_delete_server_tree": [
+        {
+            "args": {
+                "flavor": {
+                    "name": "m1.tiny"
+                },
+                "force_delete": false,
+                "image": {
+                    "name": "^cirros.*uec$"
+                }
+            },
+            "context": {
+                "treequotas": {
+                    "nova": {
+                        "instances": 4
+                    }
+                },
+                "users": {
+                    "project_domain": "default",
+                    "resource_management_workers": 20,
+                    "tenants": 1,
+                    "user_choice_method": "random",
+                    "user_domain": "default",
+                    "users_per_tenant": 1
+                },
+                "userstree_context": {
+                    "childs_per_parent": 1,
+                    "departmental_tenants": 1,
+                    "project_domain": "default",
+                    "resource_management_workers": 20,
+                    "tree_height": 1,
+                    "user_choice_method": "random",
+                    "user_domain": "default",
+                    "users_per_tenant": 2
+                }
+            },
+            "runner": {
+                "concurrency": 1,
+                "times": 100,
+                "type": "constant"
+            }
+        },
+        {
+            "args": {
+                "flavor": {
+                    "name": "m1.tiny"
+                },
+                "force_delete": false,
+                "image": {
+                    "name": "^cirros.*uec$"
+                }
+            },
+            "context": {
+                "treequotas": {
+                    "nova": {
+                        "instances": 4
+                    }
+                },
+                "users": {
+                    "project_domain": "default",
+                    "resource_management_workers": 20,
+                    "tenants": 1,
+                    "user_choice_method": "random",
+                    "user_domain": "default",
+                    "users_per_tenant": 1
+                },
+                "userstree_context": {
+                    "childs_per_parent": 3,
+                    "departmental_tenants": 1,
+                    "project_domain": "default",
+                    "resource_management_workers": 20,
+                    "tree_height": 3,
+                    "user_choice_method": "random",
+                    "user_domain": "default",
+                    "users_per_tenant": 2
+                }
+            },
+            "runner": {
+                "concurrency": 1,
+                "times": 100,
+                "type": "constant"
+            }
+        },
+        {
+            "args": {
+                "flavor": {
+                    "name": "m1.tiny"
+                },
+                "force_delete": false,
+                "image": {
+                    "name": "^cirros.*uec$"
+                }
+            },
+            "context": {
+                "treequotas": {
+                    "nova": {
+                        "instances": 4
+                    }
+                },
+                "users": {
+                    "project_domain": "default",
+                    "resource_management_workers": 20,
+                    "tenants": 1,
+                    "user_choice_method": "random",
+                    "user_domain": "default",
+                    "users_per_tenant": 1
+                },
+                "userstree_context": {
+                    "childs_per_parent": 7,
+                    "departmental_tenants": 1,
+                    "project_domain": "default",
+                    "resource_management_workers": 20,
+                    "tree_height": 3,
+                    "user_choice_method": "random",
+                    "user_domain": "default",
+                    "users_per_tenant": 2
+                }
+            },
+            "runner": {
+                "concurrency": 1,
+                "times": 100,
+                "type": "constant"
+            }
+        },
+        {
+            "args": {
+                "flavor": {
+                    "name": "m1.tiny"
+                },
+                "force_delete": false,
+                "image": {
+                    "name": "^cirros.*uec$"
+                }
+            },
+            "context": {
+                "treequotas": {
+                    "nova": {
+                        "instances": 4
+                    }
+                },
+                "users": {
+                    "project_domain": "default",
+                    "resource_management_workers": 20,
+                    "tenants": 1,
+                    "user_choice_method": "random",
+                    "user_domain": "default",
+                    "users_per_tenant": 1
+                },
+                "userstree_context": {
+                    "childs_per_parent": 3,
+                    "departmental_tenants": 1,
+                    "project_domain": "default",
+                    "resource_management_workers": 20,
+                    "tree_height": 5,
+                    "user_choice_method": "random",
+                    "user_domain": "default",
+                    "users_per_tenant": 2
+                }
+            },
+            "runner": {
+                "concurrency": 1,
+                "times": 100,
+                "type": "constant"
+            }
+        }
+    ]
+}
+#+END_SRC
+
+Update case settings.
+
+#+BEGIN_SRC sh :noweb yes
+cat > /tmp/case <<EOF
+<<cases>>
+EOF
+scp /tmp/case james:~/.rally/plugins/userstree/4-cases.json
+#+END_SRC
+
+#+RESULTS:
+
+Run rally test.
+
+#+BEGIN_SRC sh :session shell_james
+~/rally/bin/rally task start ~/.rally/plugins/userstree/4-cases.json
+#+END_SRC
+
+Save rally results.
+
+#+BEGIN_SRC sh :session shell_james
+name=$(~/rally/bin/rally task list | grep '| ' | tail -n 1 | awk '{print $2}')
+~/rally/bin/rally task results $name > /tmp/orig
+#+END_SRC
+
+#+RESULTS:
+:
+
+Download results.
+
+#+BEGIN_SRC sh
+scp james:/tmp/orig /tmp
+#+END_SRC
+
+#+RESULTS:
+
+Checkout PoC code for hierarchical quotas.
+
+#+BEGIN_SRC sh :session shell_james
+cd /opt/stack/nova/
+git fetch ssh://avolkov@review.openstack.org:29418/openstack/nova refs/changes/72/391072/10 && git checkout FETCH_HEAD
+#+END_SRC
+
+#+RESULTS:
+
+Remove quota settings from nova.conf.
+
+#+BEGIN_SRC sh :session shell_james
+sed -i '/quota_driver=/d' /etc/nova/nova.conf
+sed -i '/hierarchy_quota_overbooking_allowed=/d' /etc/nova/nova.conf
+sed -i '/hierarchy_quota_projecs_cache_seconds=/d' /etc/nova/nova.conf
+#+END_SRC
+
+#+RESULTS:
+
+Add quota settings to nova.conf.
+
+#+BEGIN_SRC sh :session shell_james
+sed -i 's/\[DEFAULT\]/\[DEFAULT\]\nquota_driver=nova.quota.HierarchyQuotaDriver\nhierarchy_quota_overbooking_allowed=True\nhierarchy_quota_projecs_cache_seconds=-1/' /etc/nova/nova.conf
+#+END_SRC
+
+#+RESULTS:
+
+Restart nova api service.
+And run tests again.
+
+Save rally results for patched version.
+
+#+BEGIN_SRC sh :session shell_james
+name=$(~/rally/bin/rally task list | grep '| ' | tail -n 1 | awk '{print $2}')
+~/rally/bin/rally task results $name > /tmp/patched
+#+END_SRC
+
+#+RESULTS:
+
+And download results again.
+
+#+BEGIN_SRC sh
+scp james:/tmp/patched /tmp
+#+END_SRC
+
+#+RESULTS:
+
+Plot graph.
+
+#+BEGIN_SRC python :results file replace
+    import json
+    import itertools
+    import pandas as pd
+    columns = ['1', '10', '20', '100', '1p', '10p', '20p', '100p']
+    rally_results = itertools.chain(
+        json.load(open('/tmp/orig')),
+        json.load(open('/tmp/patched')))
+
+    data = {}
+    for i, task in enumerate(rally_results):
+        task_data = []
+        for step in task['result']:
+            t = step["atomic_actions"]['nova.boot_server']
+            task_data.append(t)
+            # print (step["atomic_actions"]['nova.boot_server'])
+        data[columns[i]] = task_data
+    df = pd.DataFrame(data, columns=columns)
+    ax = df.plot(kind='box')
+
+    ax.set_xlabel('number of tenants')
+    ax.set_ylabel('nova boot server processing time, s')
+    fig = ax.get_figure()
+    fig.savefig('hq_perf.png')
+    return 'hq_perf.png'
+#+END_SRC
+
+#+RESULTS:
+[[file:hq_perf.png]]
+
+[[hq_perf.png]]
