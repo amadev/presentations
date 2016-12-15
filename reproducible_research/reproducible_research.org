@@ -1,0 +1,148 @@
+* Reproducible research
+
+** What does it mean?
+   CLOSED: [2016-12-15 Thu 23:17]
+
+- Tools for automation
+  like ansible, salt are for reproducing 
+  state on nodes.
+
+- Tools for reproducible research
+  - sweave or knitr for R
+  - ipython notebook
+  - emacs org-mode
+
+Goal: get same state author had on a reader side.
+
+It's better to make all operation
+inside tool not on particular node.
+
+** emacs
+
+- Editor written on C and Elisp.
+- Lots of modules on Elisp including org-mode
+
+*** org-mode
+
+Includes org text format and tools
+for doing different things with that format.
+One thing is reproducible research with babel.
+
+*** babel
+
+Can combine several languages in one document.
+Specially formated block can be exported to temporary file
+and run with appropriate language tool.
+One more 
+
+** examples
+
+#+name: directories
+#+begin_src sh :results replace
+cd ~/m/nova && du -sc * | grep -v total
+#+end_src
+
+|  1984 | api-guide             |
+|  6556 | api-ref               |
+|    52 | AUTHORS               |
+|     4 | babel.cfg             |
+|     4 | bindep.txt            |
+|  1308 | ChangeLog             |
+|    16 | contrib               |
+|     4 | CONTRIBUTING.rst      |
+| 50900 | cover                 |
+|    20 | devstack              |
+| 11336 | doc                   |
+|   396 | etc                   |
+|     8 | HACKING.rst           |
+|   836 | instances             |
+|   592 | keys                  |
+|    12 | LICENSE               |
+|     4 | MAINTAINERS           |
+|     4 | networks              |
+| 47724 | nova                  |
+|   200 | nova.egg-info         |
+|     4 | nova.sqlite           |
+|   280 | plugins               |
+|     4 | README.rst            |
+|  2888 | releasenotes          |
+|     4 | requirements.txt      |
+|     4 | run_tests.sh          |
+|    12 | setup.cfg             |
+|     4 | setup.py              |
+|     4 | test-requirements.txt |
+|     8 | tests-py3.txt         |
+|   148 | tools                 |
+|     8 | tox.ini               |
+
+#+name: directory-pie-chart
+#+begin_src R :file nova.png :results value graphics :var dirs = directories
+  pie(dirs[,1], labels = dirs[,2])
+#+end_src
+
+[[./nova.png][nova.png]]
+
+#+begin_src ditaa :file ditaa.png :cmdline -r
+    +--------+   +-------+    +-------+
+    |        | --+ ditaa +--> |       |
+    |  Text  |   +-------+    |diagram|
+    |Document|   |!magic!|    |       |
+    |     {d}|   |       |    |       |
+    +---+----+   +-------+    +-------+
+        :                         ^
+        |       Lots of work      |
+        +-------------------------+
+#+end_src
+
+#+RESULTS:
+[[file:ditaa.png]]
+
+[[./ditaa.png][ditaa.png]]
+
+#+BEGIN_SRC plantuml :file cell.png :results replace
+start
+
+if (old_service) then (yes)
+  :get_instance_from_main_db;
+  stop
+endif
+
+if (instance_mapping_exists) then (yes)
+  :instance = get_instance_from_cell_db;
+elseif (instance_is_not_created_yet) then (yes)
+  if (build_request_exists) then (yes)
+    :instance = build_request.instance;
+  else (no)
+    if (instance_mapping_exists) then (yes)
+      :instance = get_instance_from_cell_db;
+    else (no)
+      :instance = get_instance_from_main_db;
+    endif
+  endif
+endif
+stop
+#+END_SRC
+
+#+RESULTS:
+[[file:cell.png]]
+
+[[./cell.png][cell.png]]
+
+#+begin_src sqlite :db test.sqlite
+drop table if exists instance;
+create table instance (id int, name varchar(16));
+insert into instance values (1, 'inst1');
+insert into instance values (2, 'inst2');
+#+end_src
+
+#+RESULTS:
+
+#+begin_src sqlite :db test.sqlite
+select * from instance;
+#+end_src
+
+| 1 | inst1 |
+| 2 | inst2 |
+
+** real life example
+[[file:///home/amadev/org/presentations/hq_perf.org][hq_perf.org]]
