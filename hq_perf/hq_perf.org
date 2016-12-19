@@ -316,10 +316,12 @@ Plot graph.
     data = {}
     for i, task in enumerate(rally_results):
         task_data = []
+        f = open('/tmp/res-%s' % columns[i], 'w')
         for step in task['result']:
             t = step["atomic_actions"]['nova.boot_server']
             task_data.append(t)
-            # print (step["atomic_actions"]['nova.boot_server'])
+            f.write('%s\n' % t)
+        f.close()
         data[columns[i]] = task_data
     df = pd.DataFrame(data, columns=columns)
     ax = df.plot(kind='box')
@@ -335,3 +337,31 @@ Plot graph.
 [[file:hq_perf.png]]
 
 [[hq_perf.png]]
+
+#+BEGIN_SRC python
+from doan import r_num, stat
+ds = r_num('/tmp/res-1')
+return stat(ds)
+#+END_SRC
+
+: |         length|            100|
+: |           mean|        11.0077|
+: |            std|        1.32138|
+: |            max|        15.3439|
+: |            min|         9.5368|
+: |               |             5%|            16%|            25%|            50%|            75%|            84%|            95%|
+: |           pcs.|        9.78825|        9.93734|        10.0519|        10.4442|        11.5836|        12.2177|        14.2216|
+: |     calc. pcs.|        8.36492|         9.6863|        10.1224|        11.0077|         11.893|        12.3291|        13.6505|
+: |      normality|              0|
+
+
+#+BEGIN_SRC python :results file replace
+from doan import r_num, hist
+ds = r_num('/tmp/res-1')
+return hist(ds, bins=40, output='hist-1.png')
+#+END_SRC
+
+#+RESULTS:
+[[file:hist-1.png]]
+
+[[hist-1.png]]
