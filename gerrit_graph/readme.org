@@ -1,0 +1,106 @@
+Create database.
+
+#+BEGIN_SRC sqlite :db changes.db
+-- drop table if exists import;
+create table import (
+  id integer primary key autoincrement,
+  created  datetime
+);
+
+-- drop table if exists change;
+create table change (
+  change_id varchar(64),
+  author varchar(128),
+  verified int,
+  code_review int,
+  project varchar(128),
+  branch varchar(128),
+  topic varchar(128),
+  subject varchar(128),
+  status varchar(16),
+  mergeable bool,
+  insertions int,
+  deletions int,
+  created datetime,
+  updated datetime,
+  import_id int
+);
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC sqlite :db changes.db :results replace
+select * from import;
+#+END_SRC
+
+| 3 | 2016-12-17 23:02:19.485029 |
+| 4 | 2016-12-18 23:02:21.721283 |
+
+#+name: review_stat
+#+BEGIN_SRC sqlite :db changes.db :results replace
+  select date(i.created), count(*), 'total'
+  from change c join import i on c.import_id = i.id
+  group by i.id;
+
+  select date(i.created), count(*), 'ready'
+  from change c join import i on c.import_id = i.id
+  where verified > 0 and code_review = 0
+  group by i.id;
+
+  select date(i.created), count(*), 'ready_for_cores'
+  from change c join import i on c.import_id = i.id
+  where verified > 0 and code_review = 1
+  group by i.id;
+
+  select date(i.created), count(*), 'verification_failed'
+  from change c join import i on c.import_id = i.id
+  where verified < 0
+  group by i.id;
+
+  select date(i.created), count(*), 'non_mergable'
+  from change c join import i on c.import_id = i.id
+  where mergeable = 0
+  group by i.id;
+#+END_SRC
+
+| 2016-12-17 | 689 | total               |
+| 2016-12-18 | 691 | total               |
+| 2016-12-17 | 200 | ready               |
+| 2016-12-18 | 203 | ready               |
+| 2016-12-17 | 123 | ready_for_cores     |
+| 2016-12-18 | 120 | ready_for_cores     |
+| 2016-12-17 | 320 | verification_failed |
+| 2016-12-18 | 321 | verification_failed |
+| 2016-12-17 |  94 | non_mergable        |
+| 2016-12-18 |  94 | non_mergable        |
+
+#+BEGIN_SRC sqlite :db changes.db :results replace
+select verified, code_review, count(*) from change
+where import_id = (select max(id) from import)
+group by 1, 2;
+#+END_SRC
+
+| -1 | -1 |  84 |
+| -1 |  0 | 191 |
+| -1 |  1 |  46 |
+|  0 |  0 |   5 |
+|  1 | -1 |  42 |
+|  1 |  0 | 203 |
+|  1 |  1 | 120 |
+
+#+BEGIN_SRC python :var stat=review_stat :results file replace
+  from doan import r_date_num, plot_date
+  datasets = r_date_num(stat, multiple=True)
+  return plot_date(
+     datasets,
+     ls='-',
+     title='Nova review stat',
+     xlabel='Parsing date',
+     ylabel='Number of changes',
+     output='review_stat.png')
+#+END_SRC
+
+#+RESULTS:
+[[file:review_stat.png]]
+
+[[review_stat.png]]
