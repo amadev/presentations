@@ -36,19 +36,20 @@ python download.py && python parse.py
 Try some queries.
 
 #+BEGIN_SRC sqlite :db changes.db :results replace
-select * from import;
+select * from import order by id desc limit 10;
 #+END_SRC
 
-|  3 | 2016-12-17 23:02:19.485029 |
-|  4 | 2016-12-18 23:02:21.721283 |
-|  5 | 2016-12-20 11:36:41.374104 |
-|  6 | 2016-12-21 13:03:35.625684 |
-|  7 | 2016-12-22 09:02:18.452361 |
-|  8 | 2016-12-23 09:02:26.062185 |
-|  9 | 2016-12-24 09:02:21.015453 |
-| 10 | 2016-12-25 09:02:23.945149 |
-| 11 | 2016-12-26 09:02:20.494004 |
-| 12 | 2016-12-27 09:02:26.725547 |
+#+RESULTS:
+| 30 | 2017-01-16 09:02:21.504146 |
+| 29 | 2017-01-15 09:02:21.502205 |
+| 28 | 2017-01-14 09:02:33.235775 |
+| 27 | 2017-01-11 09:02:27.516531 |
+| 26 | 2017-01-10 09:02:23.400995 |
+| 25 | 2017-01-09 09:02:21.234917 |
+| 24 | 2017-01-08 09:02:21.032772 |
+| 23 | 2017-01-07 09:02:22.023730 |
+| 22 | 2017-01-06 09:02:25.690266 |
+| 21 | 2017-01-05 09:02:27.301614 |
 
 #+name: review_stat
 #+BEGIN_SRC sqlite :db changes.db :results replace
@@ -77,70 +78,20 @@ select * from import;
   group by i.id;
 #+END_SRC
 
-| 2016-12-17 | 689 | total               |
-| 2016-12-18 | 691 | total               |
-| 2016-12-20 | 688 | total               |
-| 2016-12-21 | 698 | total               |
-| 2016-12-22 | 690 | total               |
-| 2016-12-23 | 699 | total               |
-| 2016-12-24 | 691 | total               |
-| 2016-12-25 | 688 | total               |
-| 2016-12-26 | 692 | total               |
-| 2016-12-27 | 696 | total               |
-| 2016-12-17 | 200 | ready               |
-| 2016-12-18 | 203 | ready               |
-| 2016-12-20 | 204 | ready               |
-| 2016-12-21 | 206 | ready               |
-| 2016-12-22 | 216 | ready               |
-| 2016-12-23 | 220 | ready               |
-| 2016-12-24 | 218 | ready               |
-| 2016-12-25 | 216 | ready               |
-| 2016-12-26 | 223 | ready               |
-| 2016-12-27 | 224 | ready               |
-| 2016-12-17 | 123 | ready_for_cores     |
-| 2016-12-18 | 120 | ready_for_cores     |
-| 2016-12-20 | 115 | ready_for_cores     |
-| 2016-12-21 | 123 | ready_for_cores     |
-| 2016-12-22 | 121 | ready_for_cores     |
-| 2016-12-23 | 113 | ready_for_cores     |
-| 2016-12-24 | 120 | ready_for_cores     |
-| 2016-12-25 | 120 | ready_for_cores     |
-| 2016-12-26 | 114 | ready_for_cores     |
-| 2016-12-27 | 110 | ready_for_cores     |
-| 2016-12-17 | 320 | verification_failed |
-| 2016-12-18 | 321 | verification_failed |
-| 2016-12-20 | 310 | verification_failed |
-| 2016-12-21 | 306 | verification_failed |
-| 2016-12-22 | 294 | verification_failed |
-| 2016-12-23 | 299 | verification_failed |
-| 2016-12-24 | 293 | verification_failed |
-| 2016-12-25 | 293 | verification_failed |
-| 2016-12-26 | 297 | verification_failed |
-| 2016-12-27 | 304 | verification_failed |
-| 2016-12-17 |  94 | non_mergable        |
-| 2016-12-18 |  94 | non_mergable        |
-| 2016-12-20 |  88 | non_mergable        |
-| 2016-12-21 |  84 | non_mergable        |
-| 2016-12-22 |  81 | non_mergable        |
-| 2016-12-23 |  81 | non_mergable        |
-| 2016-12-24 |  85 | non_mergable        |
-| 2016-12-25 |  88 | non_mergable        |
-| 2016-12-26 |  91 | non_mergable        |
-| 2016-12-27 |  87 | non_mergable        |
-
 #+BEGIN_SRC sqlite :db changes.db :results replace
 select verified, code_review, count(*) from change
 where import_id = (select max(id) from import)
 group by 1, 2;
 #+END_SRC
 
-| -1 | -1 |  81 |
-| -1 |  0 | 182 |
-| -1 |  1 |  41 |
-|  0 |  0 |   4 |
-|  1 | -1 |  54 |
-|  1 |  0 | 224 |
-|  1 |  1 | 110 |
+| -1 | -1 |  82 |
+| -1 |  0 | 152 |
+| -1 |  1 |  29 |
+|  0 | -1 |   1 |
+|  0 |  0 |   5 |
+|  1 | -1 |  62 |
+|  1 |  0 | 241 |
+|  1 |  1 | 126 |
 
 Plot stat.
 
@@ -160,31 +111,3 @@ Plot stat.
 [[file:review_stat.png]]
 
 [[review_stat.png]]
-
-Choose changes for review.
-
-#+BEGIN_SRC sqlite :db changes.db :results replace
-select  author, subject, verified, code_review, topic, change_id from change
-where import_id = (select max(id) from import)
-and (subject like '%quota%' or topic like '%quota%');
-#+END_SRC
-
-| stgleb     | Add Hierarchy info                                      | -1 |  0 | bp/nested-quota-driver-api         | If91efaa38ceecfb0396eaf58dda163b1769baf69 |
-| jichenjc   | Catch ProjectQuotaNotFound when do update_limit         | -1 |  0 | bug/1552622                        | I725c3616833e9e328b21d975ab45bdfbd2058be7 |
-| slaweq     | Fix quota calculation for instances in server_group     | -1 | -1 | bug/1623809                        | Iad2f1360a126215306797aa591172d05f6f6e865 |
-| stgleb     | Add _rebuild_instance helper method                     | -1 |  1 | nested_quotas                      | I39a913edea14b25e3125dfb42569829ad0da27fd |
-| stgleb     | Add nested quota support                                | -1 | -1 | bp/nested-quota-driver-api         | I1711dbf1455bc1be207fe2cdfdf5f79c4bea4b88 |
-| stgleb     | Add child_hard_limits column                            | -1 | -1 | bp/nested-quota-driver-api         | I5876f6ee36d4a747999ed8f072de16c4c8c04470 |
-| stgleb     | Nested Quota: Set default values to subproject          | -1 | -1 | bp/nested-quota-driver-api         | If2764dc62e3ecf06bb1268e5b9a579995bce5d4b |
-| melwitt    | WIP Make Quotas object favor the API database           | -1 |  0 | bp/cells-quota-api-db              | Ifc42eb55033f4755e4a756a545eb63ce8abfec20 |
-| jichenjc   | Refactored query user_id code for quota-sets            | -1 |  1 | use_req_get                        | I40ffa8a2484fe8be3aeb077d2393f91e38b868dd |
-| mriedem    | Restrict CONF.quota_driver to DB and noop quota drivers |  1 |  0 | quota-driver-config                | I021a2bcb923739409b393cbb2684ffdf20180f73 |
-| avolkov    | Add ability to view quota details for project owner     |  1 |  1 | bug/1618513                        | I65b9de24a1310079a67e033606eaf2dde796cd48 |
-| mikalstill | Move quota options to a config group.                   |  1 |  0 | bp/centralize-config-options-ocata | Ie06a370868f01fb9a1cc246a77d7823fac83e70e |
-| avolkov    | PoC: add hierarchy quota driver                         |  1 |  0 | poc-hierarchy-quota                | I6b52b1554ce6a1c23216758a608b8bf56a2c297e |
-| zhaolihui  | Fix keypair quota error                                 |  1 | -1 | bug/1644457                        | Iba39cff9fb9b473fd7ca19e1288404279bb8d2f3 |
-| melwitt    | WIP Add online migration to move quotas to API database | -1 |  0 | bp/cells-quota-api-db              | I64b600b30f6e54db0ec9083c6c176e895c6d0cc2 |
-| wangyuwei  | quotas of instance in soft-delete vm_state              |  1 | -1 | bug/1501808                        | Ic84abf93e1152e1cbb3defc3adaebae17de07dc2 |
-
-
-
