@@ -1,0 +1,1179 @@
+* SR-IOV and NUMA/CPU pinning and huge pages issues for live migration
+
+There is a long lived patch series https://review.openstack.org/#/c/244489/
+which is treated as big bugfix and related to three bugs:
+
+- live migration of instance should claim resources on target compute node
+  https://bugs.launchpad.net/nova/+bug/1289064
+
+- migration/evacuation/rebuild/resize of instance with NUMA topology
+  needs to recalculate NUMA topology  
+  https://bugs.launchpad.net/nova/+bug/1417667
+
+- live-migration will not honor destination vcpu_pin_set config
+  https://bugs.launchpad.net/nova/+bug/1496135
+
+The goal of this task is to provide clear description of what the
+problems are and why changes are needed and to invite attention of nova cores
+to that description.
+
+In accompany with description it's good to have test set
+which can test LM with SR-IOV, numa, huge page features.
+
+Definition of done:
+- There is a little article describing problem and solution, there is
+  ML thread about that.
+- There is tool for testing LM with SR-IOV, numa, huge page.
+
+#+OPTIONS: ^:nil
+
+I started to review patch series [1] which addresses the issue with
+live migration resources. While doing that I made some notes possibly
+can be useful for reviewers.  I would like to share those notes and to
+ask community to look critically and check if I'm wrong in my
+conclusions.
+
+** How nova make live migration (LM)?
+*** Components of LM workflow
+
+In LM process the following components are involved:
+- nova-api 
+  Migration params are determined and validated on this level, most
+  important:
+  - instance - source VM
+  - host - target hostname
+  - block_migration
+  - force
+- conductor
+  Some orchestration process is done on this level:
+  - migration object creating
+  - LiveMigrationTask building and executing
+  - scheduler call
+  - check_can_live_migrate_destination - RPC request to compute node to check 
+    that destination environment is appropriate. On destination node
+    check_can_live_migrate_source call is made to check rollback is
+    possible.
+  - migration call to the source compute node
+- scheduler
+  Scheduler is involved in LM only if the destination host is
+  empty. In that case, scheduler's select_destinations function pick
+  an appropriate host, conductor also calls
+  check_can_live_migrate_destination on picked host.
+- compute source node
+  It's the place where migration starts and ends.
+  - pre_live_migration call to destination node is made first
+  - control is transferred to the underlying driver for migration
+  - migration monitor is started
+  - post_live_migration or rollback is made
+- compute destination node
+  Calls from conductor and source node are processed here,
+  check_can_live_migrate_source is made to the source node.
+
+*** Common calls diagram
+
+http://amadev.ru/static/lm_diagram.png
+
+*** Calls list for the libvirt case
+
+The following list of calls can be used as reference.
+  
+- nova.api.openstack.compute.migrate_server.MigrateServerController._migrate_live
+- nova.compute.api.API.live_migrate
+- nova.conductor.api.ComputeTaskAPI.live_migrate_instance
+- nova.conductor.manager.ComputeTaskManager._live_migrate
+- nova.conductor.manager.ComputeTaskManager._build_live_migrate_task
+- nova.conductor.tasks.live_migrate.LiveMigrationTask._execute
+- nova.conductor.tasks.live_migrate.LiveMigrationTask._find_destination
+- nova.scheduler.manager.SchedulerManager.select_destinations
+- nova.conductor.tasks.live_migrate.LiveMigrationTask._call_livem_checks_on_host
+- nova.compute.manager.ComputeManager.check_can_live_migrate_destination
+- nova.compute.manager.ComputeManager.live_migration
+- nova.compute.manager.ComputeManager._do_live_migration
+- nova.compute.manager.pre_live_migration
+- nova.virt.libvirt.driver.LibvirtDriver._live_migration_operation
+- nova.virt.libvirt.guest.Guest.migrate
+- librirt:domain.migrateToURI{,2,3}
+- nova.compute.manager.ComputeManager.post_live_migration_at_destination
+
+** What is the problem with LM?
+
+Nova doesn't claim resources within LM, so we can get in a situation
+with wrong scheduling until next periodic update_available_resource is
+done. It has good description in bug [2].
+
+** What changes in patch were done?
+
+New live_migration_claim was added to the ResourceTracker similarly to
+resize and rebuild claim.
+
+It was decided to initiate live_migration_claim within
+check_can_live_migrate_destination on destination node. To make that
+done migration (was created in conductor) and resource limits for
+destination node (got from scheduler) must be passed to
+check_can_live_migrate_destination, so that's why conductor call and
+compute RPC API were changed.
+
+Overall intention of this patch is taking info account amount of
+resources on destination node that can be a basement for future LM
+improvement related to numa, sr-iov, huge pages.
+
+[1] https://review.openstack.org/#/c/244489/
+[2] https://bugs.launchpad.net/nova/+bug/1289064
+
+
+** LM testing with dedicated vcpus
+
+*** Initial settings
+
+There're two hosts james and sally used for testing.
+
+#+BEGIN_SRC text
+192.168.122.35 sally
+192.168.122.198 james
+#+END_SRC
+
+Both are qemu VMs with NATed network.
+
+#+BEGIN_SRC sh
+virsh net-dumpxml default
+#+END_SRC
+
+#+begin_example
+<network connections='2'>
+  <name>default</name>
+  <uuid>a44e80a1-a298-48c1-a11e-b9f4936ddd34</uuid>
+  <forward mode='nat'>
+    <nat>
+      <port start='1024' end='65535'/>
+    </nat>
+  </forward>
+  <bridge name='virbr0' stp='on' delay='0'/>
+  <mac address='52:54:00:ca:b6:18'/>
+  <ip address='192.168.122.1' netmask='255.255.255.0'>
+    <dhcp>
+      <range start='192.168.122.2' end='192.168.122.254'/>
+    </dhcp>
+  </ip>
+</network>
+#+end_example
+
+James host definition.
+
+#+BEGIN_SRC sh
+virsh dumpxml james
+#+END_SRC
+
+#+begin_example
+<domain type='kvm' id='14'>
+  <name>james</name>
+  <uuid>46d589ee-fcb3-456d-a9e9-8d7ff84c331f</uuid>
+  <memory unit='KiB'>6144000</memory>
+  <currentMemory unit='KiB'>6144000</currentMemory>
+  <vcpu placement='static'>4</vcpu>
+  <resource>
+    <partition>/machine</partition>
+  </resource>
+  <os>
+    <type arch='x86_64' machine='pc-i440fx-wily'>hvm</type>
+    <boot dev='hd'/>
+  </os>
+  <features>
+    <acpi/>
+    <apic/>
+  </features>
+  <cpu mode='host-model'>
+    <model fallback='allow'/>
+  </cpu>
+  <clock offset='utc'>
+    <timer name='rtc' tickpolicy='catchup'/>
+    <timer name='pit' tickpolicy='delay'/>
+    <timer name='hpet' present='no'/>
+  </clock>
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>restart</on_crash>
+  <pm>
+    <suspend-to-mem enabled='no'/>
+    <suspend-to-disk enabled='no'/>
+  </pm>
+  <devices>
+    <emulator>/usr/bin/kvm-spice</emulator>
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2'/>
+      <source file='/var/lib/libvirt/images/james.img'/>
+      <backingStore/>
+      <target dev='vda' bus='virtio'/>
+      <alias name='virtio-disk0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x07' function='0x0'/>
+    </disk>
+    <disk type='file' device='cdrom'>
+      <driver name='qemu' type='raw'/>
+      <backingStore/>
+      <target dev='hda' bus='ide'/>
+      <readonly/>
+      <alias name='ide0-0-0'/>
+      <address type='drive' controller='0' bus='0' target='0' unit='0'/>
+    </disk>
+    <controller type='usb' index='0' model='ich9-ehci1'>
+      <alias name='usb'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x06' function='0x7'/>
+    </controller>
+    <controller type='usb' index='0' model='ich9-uhci1'>
+      <alias name='usb'/>
+      <master startport='0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x06' function='0x0' multifunction='on'/>
+    </controller>
+    <controller type='usb' index='0' model='ich9-uhci2'>
+      <alias name='usb'/>
+      <master startport='2'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x06' function='0x1'/>
+    </controller>
+    <controller type='usb' index='0' model='ich9-uhci3'>
+      <alias name='usb'/>
+      <master startport='4'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x06' function='0x2'/>
+    </controller>
+    <controller type='pci' index='0' model='pci-root'>
+      <alias name='pci.0'/>
+    </controller>
+    <controller type='ide' index='0'>
+      <alias name='ide'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x1'/>
+    </controller>
+    <controller type='virtio-serial' index='0'>
+      <alias name='virtio-serial0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x05' function='0x0'/>
+    </controller>
+    <interface type='network'>
+      <mac address='52:54:00:f9:99:4b'/>
+      <source network='default' bridge='virbr0'/>
+      <target dev='vnet1'/>
+      <model type='virtio'/>
+      <alias name='net0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
+    </interface>
+    <serial type='pty'>
+      <source path='/dev/pts/14'/>
+      <target port='0'/>
+      <alias name='serial0'/>
+    </serial>
+    <console type='pty' tty='/dev/pts/14'>
+      <source path='/dev/pts/14'/>
+      <target type='serial' port='0'/>
+      <alias name='serial0'/>
+    </console>
+    <channel type='spicevmc'>
+      <target type='virtio' name='com.redhat.spice.0' state='disconnected'/>
+      <alias name='channel0'/>
+      <address type='virtio-serial' controller='0' bus='0' port='1'/>
+    </channel>
+    <input type='mouse' bus='ps2'/>
+    <input type='keyboard' bus='ps2'/>
+    <graphics type='spice' port='5901' autoport='yes' listen='127.0.0.1'>
+      <listen type='address' address='127.0.0.1'/>
+      <image compression='off'/>
+    </graphics>
+    <sound model='ich6'>
+      <alias name='sound0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
+    </sound>
+    <video>
+      <model type='qxl' ram='65536' vram='65536' vgamem='16384' heads='1'/>
+      <alias name='video0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+    </video>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <driver name='vfio'/>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x1a' function='0x0'/>
+      </source>
+      <alias name='hostdev0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x09' function='0x0'/>
+    </hostdev>
+    <redirdev bus='usb' type='spicevmc'>
+      <alias name='redir0'/>
+    </redirdev>
+    <redirdev bus='usb' type='spicevmc'>
+      <alias name='redir1'/>
+    </redirdev>
+    <memballoon model='virtio'>
+      <alias name='balloon0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x08' function='0x0'/>
+    </memballoon>
+  </devices>
+  <seclabel type='dynamic' model='apparmor' relabel='yes'>
+    <label>libvirt-46d589ee-fcb3-456d-a9e9-8d7ff84c331f</label>
+    <imagelabel>libvirt-46d589ee-fcb3-456d-a9e9-8d7ff84c331f</imagelabel>
+  </seclabel>
+</domain>
+
+#+end_example
+
+Sally host definition.
+
+#+BEGIN_SRC sh
+virsh dumpxml sally
+#+END_SRC
+
+#+begin_example
+<domain type='kvm' id='13'>
+  <name>sally</name>
+  <uuid>6f206a33-3a37-42da-95cf-1106e6ade7da</uuid>
+  <memory unit='KiB'>6144000</memory>
+  <currentMemory unit='KiB'>6144000</currentMemory>
+  <vcpu placement='static'>4</vcpu>
+  <resource>
+    <partition>/machine</partition>
+  </resource>
+  <os>
+    <type arch='x86_64' machine='pc-i440fx-wily'>hvm</type>
+    <boot dev='hd'/>
+  </os>
+  <features>
+    <acpi/>
+    <apic/>
+  </features>
+  <cpu mode='host-model'>
+    <model fallback='allow'/>
+  </cpu>
+  <clock offset='utc'>
+    <timer name='rtc' tickpolicy='catchup'/>
+    <timer name='pit' tickpolicy='delay'/>
+    <timer name='hpet' present='no'/>
+  </clock>
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>restart</on_crash>
+  <pm>
+    <suspend-to-mem enabled='no'/>
+    <suspend-to-disk enabled='no'/>
+  </pm>
+  <devices>
+    <emulator>/usr/bin/kvm-spice</emulator>
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2'/>
+      <source file='/var/lib/libvirt/images/sally.img'/>
+      <backingStore/>
+      <target dev='vda' bus='virtio'/>
+      <alias name='virtio-disk0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x07' function='0x0'/>
+    </disk>
+    <disk type='file' device='cdrom'>
+      <driver name='qemu' type='raw'/>
+      <backingStore/>
+      <target dev='hda' bus='ide'/>
+      <readonly/>
+      <alias name='ide0-0-0'/>
+      <address type='drive' controller='0' bus='0' target='0' unit='0'/>
+    </disk>
+    <controller type='usb' index='0' model='ich9-ehci1'>
+      <alias name='usb'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x06' function='0x7'/>
+    </controller>
+    <controller type='usb' index='0' model='ich9-uhci1'>
+      <alias name='usb'/>
+      <master startport='0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x06' function='0x0' multifunction='on'/>
+    </controller>
+    <controller type='usb' index='0' model='ich9-uhci2'>
+      <alias name='usb'/>
+      <master startport='2'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x06' function='0x1'/>
+    </controller>
+    <controller type='usb' index='0' model='ich9-uhci3'>
+      <alias name='usb'/>
+      <master startport='4'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x06' function='0x2'/>
+    </controller>
+    <controller type='pci' index='0' model='pci-root'>
+      <alias name='pci.0'/>
+    </controller>
+    <controller type='ide' index='0'>
+      <alias name='ide'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x1'/>
+    </controller>
+    <controller type='virtio-serial' index='0'>
+      <alias name='virtio-serial0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x05' function='0x0'/>
+    </controller>
+    <interface type='network'>
+      <mac address='52:54:00:46:8b:61'/>
+      <source network='default' bridge='virbr0'/>
+      <target dev='vnet0'/>
+      <model type='virtio'/>
+      <alias name='net0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
+    </interface>
+    <serial type='pty'>
+      <source path='/dev/pts/8'/>
+      <target port='0'/>
+      <alias name='serial0'/>
+    </serial>
+    <console type='pty' tty='/dev/pts/8'>
+      <source path='/dev/pts/8'/>
+      <target type='serial' port='0'/>
+      <alias name='serial0'/>
+    </console>
+    <channel type='spicevmc'>
+      <target type='virtio' name='com.redhat.spice.0' state='disconnected'/>
+      <alias name='channel0'/>
+      <address type='virtio-serial' controller='0' bus='0' port='1'/>
+    </channel>
+    <input type='mouse' bus='ps2'/>
+    <input type='keyboard' bus='ps2'/>
+    <graphics type='spice' port='5900' autoport='yes' listen='127.0.0.1'>
+      <listen type='address' address='127.0.0.1'/>
+      <image compression='off'/>
+    </graphics>
+    <sound model='ich6'>
+      <alias name='sound0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
+    </sound>
+    <video>
+      <model type='qxl' ram='65536' vram='65536' vgamem='16384' heads='1'/>
+      <alias name='video0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+    </video>
+    <redirdev bus='usb' type='spicevmc'>
+      <alias name='redir0'/>
+    </redirdev>
+    <redirdev bus='usb' type='spicevmc'>
+      <alias name='redir1'/>
+    </redirdev>
+    <memballoon model='virtio'>
+      <alias name='balloon0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x08' function='0x0'/>
+    </memballoon>
+  </devices>
+  <seclabel type='dynamic' model='apparmor' relabel='yes'>
+    <label>libvirt-6f206a33-3a37-42da-95cf-1106e6ade7da</label>
+    <imagelabel>libvirt-6f206a33-3a37-42da-95cf-1106e6ade7da</imagelabel>
+  </seclabel>
+</domain>
+
+#+end_example
+
+James has all-in-one devstack installation.
+
+#+BEGIN_SRC sh :dir /ssh:james:
+cat ~/m/devstack/local.conf
+#+END_SRC
+
+#+begin_example
+[[local|localrc]]
+DATABASE_PASSWORD=56592b2f97c7de918edd
+RABBIT_PASSWORD=3cb926dc833b00305f34
+SERVICE_PASSWORD=3e00a64e5423b03a7d61
+ADMIN_PASSWORD=admin
+SERVICE_TOKEN=$ADMIN_PASSWORD
+#+end_example
+
+Sally has nova-compute and neutron agent.
+
+#+BEGIN_SRC sh :dir /ssh:sally:
+cat ~/m/devstack/local.conf
+#+END_SRC
+
+#+begin_example
+[[local|localrc]]
+DATABASE_PASSWORD=56592b2f97c7de918edd
+RABBIT_PASSWORD=3cb926dc833b00305f34
+SERVICE_PASSWORD=3e00a64e5423b03a7d61
+ADMIN_PASSWORD=admin
+SERVICE_TOKEN=$ADMIN_PASSWORD
+
+ENABLED_SERVICES=n-cpu,q-agt
+
+DATABASE_TYPE=mysql
+SERVICE_HOST=192.168.122.198
+MYSQL_HOST=$SERVICE_HOST
+RABBIT_HOST=$SERVICE_HOST
+GLANCE_HOSTPORT=$SERVICE_HOST:9292
+#+end_example
+
+Before making LM, ssh keys have to be exchanged.
+Ssh key from root@james is copied to amadev@sally,
+amadev is user from which openstack is run.
+
+#+BEGIN_SRC text
+sudo su
+ssh-copy-id  -i /root/.ssh/id_rsa.pub amadev@sally
+ssh amadev@sally
+#+END_SRC
+
+*** Migration
+
+Migration process is quite easy.
+
+#+BEGIN_SRC text
+
+nova list
+
++--------------------------------------+-------------+--------+------------+-------------+--------------------------------+
+| ID                                   | Name        | Status | Task State | Power State | Networks                       |
++--------------------------------------+-------------+--------+------------+-------------+--------------------------------+
+| 223dc176-053b-48ba-bfdd-37959bf28738 | the-shotgun | ACTIVE | -          | Running     | public=2001:db8::4, 172.24.4.7 |
++--------------------------------------+-------------+--------+------------+-------------+--------------------------------+
+
+nova show 223dc176-053b-48ba-bfdd-37959bf28738 | grep hypervisor_hostname
+| OS-EXT-SRV-ATTR:hypervisor_hostname  | james                                                          |
+
+nova live-migration 223dc176-053b-48ba-bfdd-37959bf28738 sally
+
+nova list
+
++--------------------------------------+-------------+--------+------------+-------------+--------------------------------+
+| ID                                   | Name        | Status | Task State | Power State | Networks                       |
++--------------------------------------+-------------+--------+------------+-------------+--------------------------------+
+| 223dc176-053b-48ba-bfdd-37959bf28738 | the-shotgun | ACTIVE | -          | Running     | public=2001:db8::4, 172.24.4.7 |
++--------------------------------------+-------------+--------+------------+-------------+--------------------------------+
+
+nova show 223dc176-053b-48ba-bfdd-37959bf28738 | grep hypervisor_hostname
+
+| OS-EXT-SRV-ATTR:hypervisor_hostname  | sally                                                          |
+
+#+END_SRC
+
+*** Setup numa environment
+
+Update config for sally and james to emulate numa behavior.
+
+**** Setup numa for james
+
+#+BEGIN_SRC sh :noweb yes
+virsh dumpxml james > /tmp/orig_james.xml
+#+END_SRC
+
+
+#+BEGIN_SRC sh
+replace.py /tmp/orig_james.xml '<cpu[\s\S\n]*</cpu>' "<cpu mode='host-passthrough'>
+    <numa>
+      <cell id='0' cpus='0-1' memory='3072000' unit='KiB'/>
+      <cell id='1' cpus='2-3' memory='3072000' unit='KiB'/>
+    </numa>
+  </cpu>" > /tmp/numa_james.xml
+#+END_SRC
+
+#+BEGIN_SRC sh
+virsh define /tmp/numa_james.xml
+virsh shutdown james
+virsh start james
+#+END_SRC
+
+#+BEGIN_SRC sh :session shell_james
+numactl -H
+#+END_SRC
+
+#+begin_example
+available: 2 nodes (0-1)
+node 0 cpus: 0 1
+node 0 size: 2937 MB
+node 0 free: 280 MB
+node 1 cpus: 2 3
+node 1 size: 2888 MB
+node 1 free: 44 MB
+node distances:
+node   0   1 
+  0:  10  20 
+  1:  20  10
+#+end_example
+
+**** Setup numa for sally
+
+#+BEGIN_SRC sh :noweb yes
+virsh dumpxml sally > /tmp/orig_sally.xml
+#+END_SRC
+
+#+BEGIN_SRC sh
+replace.py /tmp/orig_sally.xml '<cpu[\s\S\n]*</cpu>' "<cpu mode='host-passthrough'>
+    <numa>
+      <cell id='0' cpus='0-1' memory='3072000' unit='KiB'/>
+      <cell id='1' cpus='2-3' memory='3072000' unit='KiB'/>
+    </numa>
+  </cpu>" > /tmp/numa_sally.xml
+#+END_SRC
+
+#+BEGIN_SRC sh
+virsh define /tmp/numa_sally.xml
+virsh shutdown sally
+virsh start sally
+#+END_SRC
+
+#+BEGIN_SRC sh :session shell_sally
+numactl -H
+#+END_SRC
+
+#+begin_example
+available: 2 nodes (0-1)
+node 0 cpus: 0 1
+node 0 size: 2937 MB
+node 0 free: 2680 MB
+node 1 cpus: 2 3
+node 1 size: 2888 MB
+
+node 1 free: 2772 MB
+node distances:
+node   0   1 
+  0:  10  20 
+  1:  20  10
+#+end_example
+
+**** Update system packages
+
+For numa related tasks a modern version of libvirt and qemu must be used.
+
+#+BEGIN_SRC sh
+sudo add-apt-repository ppa:ubuntu-cloud-archive/liberty-staging
+
+sudo apt-get update
+sudo apt-get install libvirt-dev libvirt-bin
+sudo apt-get install qemu-kvm qemu-system-x86
+sudo apt-get install numactl
+#+END_SRC
+
+**** Checkout patch
+
+To test patch the following options were added to local.conf.
+
+#+BEGIN_SRC text
+NOVA_REPO=https://review.openstack.org/p/openstack/nova
+NOVA_BRANCH=refs/changes/44/286744/32
+#+END_SRC
+
+As we change nova version it's better to re-install devstack
+from scratch (but not necessary).
+
+#+BEGIN_SRC sh
+time ./clean.sh &> /tmp/clean.log
+cp devstack/local.conf .
+rm -rf devstack
+sudo rm -rf /opt/stack
+pip freeze | grep -v "^-e" | sudo xargs pip uninstall -y
+git clone git@github.com:openstack-dev/devstack.git
+cp local.conf devstack/
+cd devstak
+time ./stack.sh &> /tmp/stack.log
+#+END_SRC
+
+*** LM test
+
+Create flavor with dedicated policy.
+
+#+BEGIN_SRC sh :session shell_james
+nova flavor-create cirros_dedicated 1002 128 5 2
+nova flavor-key cirros_dedicated set hw:cpu_policy=dedicated
+#+END_SRC
+
+#+begin_example
++------+------------------+-----------+------+-----------+------+-------+-------------+-----------+
+| ID   | Name             | Memory_MB | Disk | Ephemeral | Swap | VCPUs | RXTX_Factor | Is_Public |
++------+------------------+-----------+------+-----------+------+-------+-------------+-----------+
+| 1002 | cirros_dedicated | 128       | 5    | 0         |      | 2     | 1.0         | True      |
++------+------------------+-----------+------+-----------+------+-------+-------------+-----------+
+#+end_example
+
+Create two instances on different hosts.
+
+#+BEGIN_SRC sh
+nova boot --flavor cirros_dedicated \
+  --image cirros-0.3.4-x86_64-uec \
+  --availability-zone nova:james:james \
+  $(rname.sh)
+
+nova boot --flavor cirros_dedicated \
+  --image cirros-0.3.4-x86_64-uec \
+  --availability-zone nova:sally:sally \
+  $(rname.sh)
+#+END_SRC
+
+#+BEGIN_SRC sh :session shell_sally
+nova list
+#+END_SRC
+
+#+begin_example
++--------------------------------------+-----------------+--------+------------+-------------+---------------------------------+
+| ID                                   | Name            | Status | Task State | Power State | Networks                        |
++--------------------------------------+-----------------+--------+------------+-------------+---------------------------------+
+| 37ba5bdb-65cb-480e-a932-4c4ab29789ff | cruel-cutie     | ACTIVE | -          | Running     | public=172.24.4.12, 2001:db8::d |
+| 20b8a0da-3c3e-4d0e-9723-2c6d7f3fa3a8 | the-executioner | ACTIVE | -          | Running     | public=172.24.4.6, 2001:db8::a  |
++--------------------------------------+-----------------+--------+------------+-------------+---------------------------------+
+#+end_example
+
+**** Vcpus pinning before migration
+
+#+BEGIN_SRC sh :session shell_sally
+nova show 37ba5bdb-65cb-480e-a932-4c4ab29789ff | grep instance_name
+nova show 20b8a0da-3c3e-4d0e-9723-2c6d7f3fa3a8 | grep instance_name
+#+END_SRC
+
+#+begin_example
+| OS-EXT-SRV-ATTR:instance_name        | instance-0000000a                                              |
+| OS-EXT-SRV-ATTR:instance_name        | instance-00000009                                              |
+#+end_example
+
+#+BEGIN_SRC sh :dir /ssh:james:
+source openrc ~/m/devstack/openrc admin admin
+virsh vcpupin instance-0000000a
+virsh dumpxml instance-0000000a
+#+END_SRC
+
+#+begin_example
+VCPU: CPU Affinity
+----------------------------------
+   0: 0
+   1: 1
+
+<domain type='kvm' id='4'>
+  <name>instance-0000000a</name>
+  <uuid>37ba5bdb-65cb-480e-a932-4c4ab29789ff</uuid>
+  <metadata>
+    <nova:instance xmlns:nova="http://openstack.org/xmlns/libvirt/nova/1.0">
+      <nova:package version="15.0.0"/>
+      <nova:name>cruel-cutie</nova:name>
+      <nova:creationTime>2017-02-15 16:40:30</nova:creationTime>
+      <nova:flavor name="cirros_dedicated">
+        <nova:memory>128</nova:memory>
+        <nova:disk>5</nova:disk>
+        <nova:swap>0</nova:swap>
+        <nova:ephemeral>0</nova:ephemeral>
+        <nova:vcpus>2</nova:vcpus>
+      </nova:flavor>
+      <nova:owner>
+        <nova:user uuid="833e156015c74d98a8e09211c6a9fab3">admin</nova:user>
+        <nova:project uuid="875a66fd11f84b518e017b8ad48974b8">admin</nova:project>
+      </nova:owner>
+      <nova:root type="image" uuid="12681c45-36e4-420e-91fc-ac0ed2cca3ca"/>
+    </nova:instance>
+  </metadata>
+  <memory unit='KiB'>131072</memory>
+  <currentMemory unit='KiB'>131072</currentMemory>
+  <vcpu placement='static'>2</vcpu>
+  <cputune>
+    <shares>2048</shares>
+    <vcpupin vcpu='0' cpuset='0'/>
+    <vcpupin vcpu='1' cpuset='1'/>
+    <emulatorpin cpuset='0-1'/>
+  </cputune>
+  <numatune>
+    <memory mode='strict' nodeset='0'/>
+    <memnode cellid='0' mode='strict' nodeset='0'/>
+  </numatune>
+  <resource>
+    <partition>/machine</partition>
+  </resource>
+  <sysinfo type='smbios'>
+    <system>
+      <entry name='manufacturer'>OpenStack Foundation</entry>
+      <entry name='product'>OpenStack Nova</entry>
+      <entry name='version'>15.0.0</entry>
+      <entry name='serial'>ee89d546-b3fc-6d45-a9e9-8d7ff84c331f</entry>
+      <entry name='uuid'>37ba5bdb-65cb-480e-a932-4c4ab29789ff</entry>
+      <entry name='family'>Virtual Machine</entry>
+    </system>
+  </sysinfo>
+  <os>
+    <type arch='x86_64' machine='pc-i440fx-vivid'>hvm</type>
+    <kernel>/opt/stack/data/nova/instances/37ba5bdb-65cb-480e-a932-4c4ab29789ff/kernel</kernel>
+    <initrd>/opt/stack/data/nova/instances/37ba5bdb-65cb-480e-a932-4c4ab29789ff/ramdisk</initrd>
+    <cmdline>root=/dev/vda console=tty0 console=ttyS0</cmdline>
+    <boot dev='hd'/>
+    <smbios mode='sysinfo'/>
+  </os>
+  <features>
+    <acpi/>
+    <apic/>
+  </features>
+  <cpu>
+    <topology sockets='2' cores='1' threads='1'/>
+    <numa>
+      <cell id='0' cpus='0-1' memory='131072' unit='KiB'/>
+    </numa>
+  </cpu>
+  <clock offset='utc'>
+    <timer name='pit' tickpolicy='delay'/>
+    <timer name='rtc' tickpolicy='catchup'/>
+    <timer name='hpet' present='no'/>
+  </clock>
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>destroy</on_crash>
+  <devices>
+    <emulator>/usr/bin/kvm-spice</emulator>
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2' cache='none'/>
+      <source file='/opt/stack/data/nova/instances/37ba5bdb-65cb-480e-a932-4c4ab29789ff/disk'/>
+      <backingStore type='file' index='1'>
+        <format type='raw'/>
+        <source file='/opt/stack/data/nova/instances/_base/e90d59f9196794441c067ce6436f38a93082677c'/>
+        <backingStore/>
+      </backingStore>
+      <target dev='vda' bus='virtio'/>
+      <alias name='virtio-disk0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
+    </disk>
+    <controller type='usb' index='0'>
+      <alias name='usb'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x2'/>
+    </controller>
+    <controller type='pci' index='0' model='pci-root'>
+      <alias name='pci.0'/>
+    </controller>
+    <interface type='bridge'>
+      <mac address='fa:16:3e:26:38:a7'/>
+      <source bridge='qbrfe247271-40'/>
+      <target dev='tapfe247271-40'/>
+      <model type='virtio'/>
+      <alias name='net0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
+    </interface>
+    <serial type='file'>
+      <source path='/opt/stack/data/nova/instances/37ba5bdb-65cb-480e-a932-4c4ab29789ff/console.log'/>
+      <target port='0'/>
+      <alias name='serial0'/>
+    </serial>
+    <serial type='pty'>
+      <source path='/dev/pts/26'/>
+      <target port='1'/>
+      <alias name='serial1'/>
+    </serial>
+    <console type='file'>
+      <source path='/opt/stack/data/nova/instances/37ba5bdb-65cb-480e-a932-4c4ab29789ff/console.log'/>
+      <target type='serial' port='0'/>
+      <alias name='serial0'/>
+    </console>
+    <input type='mouse' bus='ps2'/>
+    <input type='keyboard' bus='ps2'/>
+    <graphics type='vnc' port='5900' autoport='yes' listen='127.0.0.1' keymap='en-us'>
+      <listen type='address' address='127.0.0.1'/>
+    </graphics>
+    <video>
+      <model type='cirrus' vram='16384' heads='1'/>
+      <alias name='video0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+    </video>
+    <memballoon model='virtio'>
+      <stats period='10'/>
+      <alias name='balloon0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x05' function='0x0'/>
+    </memballoon>
+  </devices>
+  <seclabel type='dynamic' model='apparmor' relabel='yes'>
+    <label>libvirt-37ba5bdb-65cb-480e-a932-4c4ab29789ff</label>
+    <imagelabel>libvirt-37ba5bdb-65cb-480e-a932-4c4ab29789ff</imagelabel>
+  </seclabel>
+</domain>
+
+#+end_example
+
+#+BEGIN_SRC sh :dir /ssh:sally:
+source openrc ~/m/devstack/openrc admin admin
+virsh vcpupin instance-00000009
+virsh dumpxml instance-00000009
+#+END_SRC
+
+#+begin_example
+VCPU: CPU Affinity
+----------------------------------
+   0: 0
+   1: 1
+
+<domain type='kvm' id='4'>
+  <name>instance-00000009</name>
+  <uuid>20b8a0da-3c3e-4d0e-9723-2c6d7f3fa3a8</uuid>
+  <metadata>
+    <nova:instance xmlns:nova="http://openstack.org/xmlns/libvirt/nova/1.0">
+      <nova:package version="15.0.0"/>
+      <nova:name>the-executioner</nova:name>
+      <nova:creationTime>2017-02-15 15:25:36</nova:creationTime>
+      <nova:flavor name="cirros_dedicated">
+        <nova:memory>128</nova:memory>
+        <nova:disk>5</nova:disk>
+        <nova:swap>0</nova:swap>
+        <nova:ephemeral>0</nova:ephemeral>
+        <nova:vcpus>2</nova:vcpus>
+      </nova:flavor>
+      <nova:owner>
+        <nova:user uuid="833e156015c74d98a8e09211c6a9fab3">admin</nova:user>
+        <nova:project uuid="875a66fd11f84b518e017b8ad48974b8">admin</nova:project>
+      </nova:owner>
+      <nova:root type="image" uuid="12681c45-36e4-420e-91fc-ac0ed2cca3ca"/>
+    </nova:instance>
+  </metadata>
+  <memory unit='KiB'>131072</memory>
+  <currentMemory unit='KiB'>131072</currentMemory>
+  <vcpu placement='static'>2</vcpu>
+  <cputune>
+    <shares>2048</shares>
+    <vcpupin vcpu='0' cpuset='0'/>
+    <vcpupin vcpu='1' cpuset='1'/>
+    <emulatorpin cpuset='0-1'/>
+  </cputune>
+  <numatune>
+    <memory mode='strict' nodeset='0'/>
+    <memnode cellid='0' mode='strict' nodeset='0'/>
+  </numatune>
+  <resource>
+    <partition>/machine</partition>
+  </resource>
+  <sysinfo type='smbios'>
+    <system>
+      <entry name='manufacturer'>OpenStack Foundation</entry>
+      <entry name='product'>OpenStack Nova</entry>
+      <entry name='version'>15.0.0</entry>
+      <entry name='serial'>336a206f-373a-da42-95cf-1106e6ade7da</entry>
+      <entry name='uuid'>20b8a0da-3c3e-4d0e-9723-2c6d7f3fa3a8</entry>
+      <entry name='family'>Virtual Machine</entry>
+    </system>
+  </sysinfo>
+  <os>
+    <type arch='x86_64' machine='pc-i440fx-vivid'>hvm</type>
+    <kernel>/opt/stack/data/nova/instances/20b8a0da-3c3e-4d0e-9723-2c6d7f3fa3a8/kernel</kernel>
+    <initrd>/opt/stack/data/nova/instances/20b8a0da-3c3e-4d0e-9723-2c6d7f3fa3a8/ramdisk</initrd>
+    <cmdline>root=/dev/vda console=tty0 console=ttyS0</cmdline>
+    <boot dev='hd'/>
+    <smbios mode='sysinfo'/>
+  </os>
+  <features>
+    <acpi/>
+    <apic/>
+  </features>
+  <cpu>
+    <topology sockets='2' cores='1' threads='1'/>
+    <numa>
+      <cell id='0' cpus='0-1' memory='131072' unit='KiB'/>
+    </numa>
+  </cpu>
+  <clock offset='utc'>
+    <timer name='pit' tickpolicy='delay'/>
+    <timer name='rtc' tickpolicy='catchup'/>
+    <timer name='hpet' present='no'/>
+  </clock>
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>destroy</on_crash>
+  <devices>
+    <emulator>/usr/bin/kvm-spice</emulator>
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2' cache='none'/>
+      <source file='/opt/stack/data/nova/instances/20b8a0da-3c3e-4d0e-9723-2c6d7f3fa3a8/disk'/>
+      <backingStore type='file' index='1'>
+        <format type='raw'/>
+        <source file='/opt/stack/data/nova/instances/_base/e90d59f9196794441c067ce6436f38a93082677c'/>
+        <backingStore/>
+      </backingStore>
+      <target dev='vda' bus='virtio'/>
+      <alias name='virtio-disk0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
+    </disk>
+    <controller type='usb' index='0'>
+      <alias name='usb'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x2'/>
+    </controller>
+    <controller type='pci' index='0' model='pci-root'>
+      <alias name='pci.0'/>
+    </controller>
+    <interface type='bridge'>
+      <mac address='fa:16:3e:1d:ad:00'/>
+      <source bridge='qbra701a540-d2'/>
+      <target dev='tapa701a540-d2'/>
+      <model type='virtio'/>
+      <alias name='net0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+    </interface>
+    <serial type='file'>
+      <source path='/opt/stack/data/nova/instances/20b8a0da-3c3e-4d0e-9723-2c6d7f3fa3a8/console.log'/>
+      <target port='0'/>
+      <alias name='serial0'/>
+    </serial>
+    <serial type='pty'>
+      <source path='/dev/pts/7'/>
+      <target port='1'/>
+      <alias name='serial1'/>
+    </serial>
+    <console type='file'>
+      <source path='/opt/stack/data/nova/instances/20b8a0da-3c3e-4d0e-9723-2c6d7f3fa3a8/console.log'/>
+      <target type='serial' port='0'/>
+      <alias name='serial0'/>
+    </console>
+    <memballoon model='virtio'>
+      <stats period='10'/>
+      <alias name='balloon0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
+    </memballoon>
+  </devices>
+  <seclabel type='dynamic' model='apparmor' relabel='yes'>
+    <label>libvirt-20b8a0da-3c3e-4d0e-9723-2c6d7f3fa3a8</label>
+    <imagelabel>libvirt-20b8a0da-3c3e-4d0e-9723-2c6d7f3fa3a8</imagelabel>
+  </seclabel>
+</domain>
+
+#+end_example
+
+**** Vcpus pinning after migration
+
+#+BEGIN_SRC sh :session shell_james
+nova live-migration 37ba5bdb-65cb-480e-a932-4c4ab29789ff sally
+#+END_SRC
+
+#+BEGIN_SRC sh :dir /ssh:sally:
+source openrc ~/m/devstack/openrc admin admin
+virsh vcpupin instance-0000000a
+virsh dumpxml instance-0000000a
+#+END_SRC
+
+#+begin_example
+VCPU: CPU Affinity
+----------------------------------
+   0: 2
+   1: 3
+
+<domain type='kvm' id='7'>
+  <name>instance-0000000a</name>
+  <uuid>37ba5bdb-65cb-480e-a932-4c4ab29789ff</uuid>
+  <metadata>
+    <nova:instance xmlns:nova="http://openstack.org/xmlns/libvirt/nova/1.0">
+      <nova:package version="15.0.0"/>
+      <nova:name>cruel-cutie</nova:name>
+      <nova:creationTime>2017-02-15 16:40:30</nova:creationTime>
+      <nova:flavor name="cirros_dedicated">
+        <nova:memory>128</nova:memory>
+        <nova:disk>5</nova:disk>
+        <nova:swap>0</nova:swap>
+        <nova:ephemeral>0</nova:ephemeral>
+        <nova:vcpus>2</nova:vcpus>
+      </nova:flavor>
+      <nova:owner>
+        <nova:user uuid="833e156015c74d98a8e09211c6a9fab3">admin</nova:user>
+        <nova:project uuid="875a66fd11f84b518e017b8ad48974b8">admin</nova:project>
+      </nova:owner>
+      <nova:root type="image" uuid="12681c45-36e4-420e-91fc-ac0ed2cca3ca"/>
+    </nova:instance>
+  </metadata>
+  <memory unit='KiB'>131072</memory>
+  <currentMemory unit='KiB'>131072</currentMemory>
+  <vcpu placement='static'>2</vcpu>
+  <cputune>
+    <vcpupin vcpu='0' cpuset='2'/>
+    <vcpupin vcpu='1' cpuset='3'/>
+    <emulatorpin cpuset='2-3'/>
+  </cputune>
+  <numatune>
+    <memory mode='strict' nodeset='1'/>
+    <memnode cellid='0' mode='strict' nodeset='1'/>
+  </numatune>
+  <resource>
+    <partition>/machine</partition>
+  </resource>
+  <sysinfo type='smbios'>
+    <system>
+      <entry name='manufacturer'>OpenStack Foundation</entry>
+      <entry name='product'>OpenStack Nova</entry>
+      <entry name='version'>15.0.0</entry>
+      <entry name='serial'>ee89d546-b3fc-6d45-a9e9-8d7ff84c331f</entry>
+      <entry name='uuid'>37ba5bdb-65cb-480e-a932-4c4ab29789ff</entry>
+      <entry name='family'>Virtual Machine</entry>
+    </system>
+  </sysinfo>
+  <os>
+    <type arch='x86_64' machine='pc-i440fx-vivid'>hvm</type>
+    <kernel>/opt/stack/data/nova/instances/37ba5bdb-65cb-480e-a932-4c4ab29789ff/kernel</kernel>
+    <initrd>/opt/stack/data/nova/instances/37ba5bdb-65cb-480e-a932-4c4ab29789ff/ramdisk</initrd>
+    <cmdline>root=/dev/vda console=tty0 console=ttyS0</cmdline>
+    <boot dev='hd'/>
+    <smbios mode='sysinfo'/>
+  </os>
+  <features>
+    <acpi/>
+    <apic/>
+  </features>
+  <cpu>
+    <topology sockets='2' cores='1' threads='1'/>
+    <numa>
+      <cell id='0' cpus='0-1' memory='131072' unit='KiB'/>
+    </numa>
+  </cpu>
+  <clock offset='utc'>
+    <timer name='pit' tickpolicy='delay'/>
+    <timer name='rtc' tickpolicy='catchup'/>
+    <timer name='hpet' present='no'/>
+  </clock>
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>destroy</on_crash>
+  <devices>
+    <emulator>/usr/bin/kvm-spice</emulator>
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2' cache='none'/>
+      <source file='/opt/stack/data/nova/instances/37ba5bdb-65cb-480e-a932-4c4ab29789ff/disk'/>
+      <backingStore type='file' index='1'>
+        <format type='raw'/>
+        <source file='/opt/stack/data/nova/instances/_base/e90d59f9196794441c067ce6436f38a93082677c'/>
+        <backingStore/>
+      </backingStore>
+      <target dev='vda' bus='virtio'/>
+      <alias name='virtio-disk0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
+    </disk>
+    <controller type='usb' index='0'>
+      <alias name='usb'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x2'/>
+    </controller>
+    <controller type='pci' index='0' model='pci-root'>
+      <alias name='pci.0'/>
+    </controller>
+    <interface type='bridge'>
+      <mac address='fa:16:3e:26:38:a7'/>
+      <source bridge='qbrfe247271-40'/>
+      <target dev='tapfe247271-40'/>
+      <model type='virtio'/>
+      <alias name='net0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
+    </interface>
+    <serial type='file'>
+      <source path='/opt/stack/data/nova/instances/37ba5bdb-65cb-480e-a932-4c4ab29789ff/console.log'/>
+      <target port='0'/>
+      <alias name='serial0'/>
+    </serial>
+    <serial type='pty'>
+      <source path='/dev/pts/8'/>
+      <target port='1'/>
+      <alias name='serial1'/>
+    </serial>
+    <console type='file'>
+      <source path='/opt/stack/data/nova/instances/37ba5bdb-65cb-480e-a932-4c4ab29789ff/console.log'/>
+      <target type='serial' port='0'/>
+      <alias name='serial0'/>
+    </console>
+    <input type='mouse' bus='ps2'/>
+    <input type='keyboard' bus='ps2'/>
+    <graphics type='vnc' port='5900' autoport='yes' listen='127.0.0.1' keymap='en-us'>
+      <listen type='address' address='127.0.0.1'/>
+    </graphics>
+    <video>
+      <model type='cirrus' vram='16384' heads='1'/>
+      <alias name='video0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+    </video>
+    <memballoon model='virtio'>
+      <stats period='10'/>
+      <alias name='balloon0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x05' function='0x0'/>
+    </memballoon>
+  </devices>
+  <seclabel type='dynamic' model='apparmor' relabel='yes'>
+    <label>libvirt-37ba5bdb-65cb-480e-a932-4c4ab29789ff</label>
+    <imagelabel>libvirt-37ba5bdb-65cb-480e-a932-4c4ab29789ff</imagelabel>
+  </seclabel>
+</domain>
+#+end_example
+
+*** Conclusion
+
+In this example, cpu pinning was recalculated correctly for the destination node.
+As 0-1 vcpus on destination node was allocated for the local VM,
+migrated VM originally pinned to 0-1 vcpus was allocated on 2-3 vcpus
+on the destination node.
+* Update and finalize SRIOV port pair allocation blueprint/spec
+* Identify main impediments for Nova scheduler/resource tracker work properly with DPDK enabled resources
+
+
