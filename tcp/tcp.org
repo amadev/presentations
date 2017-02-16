@@ -1,0 +1,149 @@
+* tcp
+
+** OSI vs Real life
+
+- OSI - 7 layers
+  
+- Internet protocol suite - 4 layers
+  https://en.wikipedia.org/wiki/Internet_protocol_suite
+  
+  [[ips.png]]
+
+OSI is a famous model widely spreaded in academic papers
+and often explained in university.
+It has 7 layers but not all existing protocols can be mapped
+directly to this layers. For example TCP protocol is speaded
+across two layers (transport and session). Some authors 
+describing OSI model can use different boundaries for layers,
+and there is phrase "layering is consider harmful".
+
+Istead of OSI some people use different model, it's called
+internet protocol suite with clean division.
+I will talk about Ethernet.
+
+# TODO: check layer naming and details
+1. Physical layer (wires)
+2. Data link layer (mac adresses)
+3. Network layer (ip)
+4. Transport layer (tcp)
+5. Application layer (http)
+
+** Bandwidth and latency
+
+# TODO: why physical layer?
+I'm going to discuss some features of tcp protocol
+but I need to start from physical layer first.
+
+There are two important terms in networks
+which used in every lection and this presentation
+is not exclusion. They are bandwidth and latency.
+
+Bandwidth is a maximum amount of data can go
+through some device or wire in a period of time.
+
+# TODO: translate water related terms
+If we think about water pipes. Bandwidth is highly
+dependend of the width of pipe.
+
+Latency is a time of transfering data from one 
+point to another point. There're lots of type of latency.
+# TODO: add types of latency
+
+When we're chosing out home network provider we think
+mostly about bandwidth and it's hard to find some information
+about latency. It's supposed it should be appropriate.
+# TODO: add bandwidth screenshot
+It's logically that both those parameters affect your network
+performace but what is ther affect on importance?
+It's easy with bandwidth that you can transfer data with
+speed more than bandwith.
+Than latency is a little bit more subtle case.
+
+*** Limits
+
+What is theoretical limits of bandwidth and latency?
+
+Now we have optical cables between Europe and America
+what limits should we think about?
+# TODO: add image for link between Europe and America
+
+On physical layer bandwidth is how many bytes can be 
+transfered through the bunch of cables,
+and latency is all about how fast we can transfer it.
+While number of cables can be quite big, speed
+has a certain limit (speed of light).
+
+# TODO: add spped of light table
+
+**** Cost of latency
+
+*** Measuring latency
+
+**** Ping
+
+# TODO: add ping ya.ru and ping openstack.org
+**** Tcpdump
+# TODO: add calculation for latency
+# TODO: add ping and traceroute example
+
+We found out that latency has concrete limits
+that can't be increased and now I would like to talk
+about how latency affects performance. Let's talk about tcp.
+
+** TCP/IP protocol
+
+I can easily say that tcp is significant part Openstack 
+because all subsystems uses tcp protocol as basement. I mean in nova
+RPC calls are JSON over AMQP which in turn uses tcp, mysql uses own binary
+protocol over TCP and ofcourse services use http over tcp.
+   
+TCP protocol has certain well known features:
+- data integrity
+- in-order delivery
+- retransmission of lost data
+- cogestion control and avoidance
+
+In other words TCP provides reliable network over unreliable channel.
+To provide those features protocol needs to implement some rules and restrictions.
+Next theme I want to talk is communication between client and server.
+
+*** 3-way handshake
+
+To start a conversation there is a handshake procedure with three steps:
+- SYN
+- SYN ACK
+- ACK
+Every new tcp connection has to go through that procedure, so in terms of latency
+it's required to make full RTT to just start a conversation.
+
+# TODO: add tcpdump for openstack
+
+Let's see some live examples.
+For openstack.org it costs 322ms only to start.
+
+*** Flow control
+*** Congestion control and avoidance
+*** Bandwidth delay product
+
+#+BEGIN_SRC sh :session shell_amadev
+mkdir ~/network
+cd ~/network
+dd if=/dev/zero of=send.bin  bs=1M  count=1
+#+END_SRC
+
+#+RESULTS:
+: 
+: amadev@8971:~/network$ 1+0 records in
+: 1+0 records out
+: 1048576 bytes (1.0 MB) copied, 0.00159084 s, 659 MB/s
+
+#+BEGIN_SRC sh
+scp ~/prog/network/server.py amadev.ru:~/network/
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC sh
+sudo tcpdump -w 1M.pcap -i wlo1 port 50007
+#+END_SRC
+
