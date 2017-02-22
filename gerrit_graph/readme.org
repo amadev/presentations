@@ -111,3 +111,10 @@ Plot stat.
 [[file:review_stat.png]]
 
 [[review_stat.png]]
+
+#+BEGIN_SRC sqlite :db changes.db :results replace
+select * from change
+where import_id = (select max(id) from import)
+limit 10;
+
+#+END_SRC
