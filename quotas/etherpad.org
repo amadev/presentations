@@ -1,0 +1,54 @@
+
+
+- Quotas consist of:
+  - Resource limit management mechanism (limits).
+  - Usages control and validation mechanism (usages).
+
+- What does HQ mean?
+  - They take into accout projects hierarchy information from keystone.
+     - are represented as adjancency list in keystone API.
+
+Example:
+
+       /-b, 5
+-a, 15
+       \-c, 5
+
+tree.use('b', {'vm': 5})  # ok
+tree.use('c', {'vm': 5})  # ok
+tree.use('a', {'vm': 15})  # fail - ProjectLimitExceed: Exceed 
+
+a_available = a_limit - a_usage - (b_usage + c_usage)
+
+Overbooking example:
+       /-b, 10
+-a, 15
+       \-c, 10
+
+tree.use('b', {'vm': 10})  # ok
+tree.use('c', {'vm': 5})  # ok
+tree.use('a', {'vm': 5})  # fail - ProjectLimitExceed: Exceed in node a, resource vm
+
+! b_limit + c_limit can be greater than a_limit
+
+Cinder nested quotas
+
+- was implemented in default driver
+  - there is possibility that with certain limits it will not work
+- has cache per each project usage (usages sum of subprojects)
+- use service user for getting project hierarchy from keystone
+  What can be better way to get project list from keystone in nova?
+
+Proposed implementation
+
+- Addressed known issues.
+- Independed driver that can be applied without the interference
+  with other quotas changes.
+- Load bunch of limits and usages in one SQL call (arguable?).
+
+Links 
+- Hierarchical quotas spec:
+  https://review.openstack.org/#/c/394422/
+- PoC:
+  https://review.openstack.org/#/c/391072/
+

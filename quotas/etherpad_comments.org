@@ -1,0 +1,48 @@
+First, to simplify our talk I want to introduce two terms:
+limits and usages. Limit is some boundaries for resources and usages is the
+current state for resorce.
+
+What does hierarchical quotas mean?
+
+It's simply. While making limits enforcement it takes into account
+information about project hierarchy stored in keystone.
+From API perspective projects hierarchy is represented 
+in keystone as adjancency listr. There is project list call
+returning list of dictionaries each of them has link to the parent one.
+
+For example, if there are projects a, b, c, where b and c are children
+of project a. Aamount of resource avaliable for project a
+limits for project a minus usage for project a, minus usage for project b
+and c.
+
+Overbooking case means that you somehow can use more resource than it's available.
+Logic for limit enforcement is the same, the only difference is in limits management
+the sum of the children limits can be greater than parent limit 
+therefore you need to check all parent limits until the root of the tree.
+
+Cinder implementation of hierarchical quotas called nested quotas
+had some issues which I believe was solved.
+I went through git history and launchpad bugs related to cinder quotas.
+
+First, nested quotas was implemented in default driver.
+Beside that is good to have ability to choose what logic to use
+I mean hierarchical or oridnary. There is danger that certain db state
+can fail with nested quotas at all. In cinder there is the api call
+that just check is nested quotas are appropriate or not for current
+limits settings.
+
+Second, Sum of subprojects usage is cached per each project in cinder implementation.
+It's called allocated column.
+Cache is thing was done I believe for the sake of performance,
+for the quotas case it adds some comlexity. The issues were in cinder
+was related to default values for newly created column. It must be separated
+code logic which process case when allocated column wasn't filled.
+Proposed solution tries not to use cache and makes online processing,
+the stess test with the help of rally was done shows no significant
+changes of performance.
+ 
+Third, current keystone policy allows to get project list for admin
+only. So for that operation service user is used, for nova it's ok now.
+But tendency for keystone is to make as litle permision as possible for service user.
+
+Now I think that issues were found in cinder was addressed in proposed patch.
