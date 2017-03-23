@@ -7,7 +7,7 @@ which is treated as big bugfix and related to three bugs:
   https://bugs.launchpad.net/nova/+bug/1289064
 
 - migration/evacuation/rebuild/resize of instance with NUMA topology
-  needs to recalculate NUMA topology  
+  needs to recalculate NUMA topology
   https://bugs.launchpad.net/nova/+bug/1417667
 
 - live-migration will not honor destination vcpu_pin_set config
@@ -37,7 +37,7 @@ conclusions.
 *** Components of LM workflow
 
 In LM process the following components are involved:
-- nova-api 
+- nova-api
   Migration params are determined and validated on this level, most
   important:
   - instance - source VM
@@ -49,7 +49,7 @@ In LM process the following components are involved:
   - migration object creating
   - LiveMigrationTask building and executing
   - scheduler call
-  - check_can_live_migrate_destination - RPC request to compute node to check 
+  - check_can_live_migrate_destination - RPC request to compute node to check
     that destination environment is appropriate. On destination node
     check_can_live_migrate_source call is made to check rollback is
     possible.
@@ -76,7 +76,7 @@ http://amadev.ru/static/lm_diagram.png
 *** Calls list for the libvirt case
 
 The following list of calls can be used as reference.
-  
+
 - nova.api.openstack.compute.migrate_server.MigrateServerController._migrate_live
 - nova.compute.api.API.live_migrate
 - nova.conductor.api.ComputeTaskAPI.live_migrate_instance
@@ -573,8 +573,8 @@ node 1 cpus: 2 3
 node 1 size: 2888 MB
 node 1 free: 44 MB
 node distances:
-node   0   1 
-  0:  10  20 
+node   0   1
+  0:  10  20
   1:  20  10
 #+end_example
 
@@ -613,8 +613,8 @@ node 1 size: 2888 MB
 
 node 1 free: 2772 MB
 node distances:
-node   0   1 
-  0:  10  20 
+node   0   1
+  0:  10  20
   1:  20  10
 #+end_example
 
@@ -1173,7 +1173,162 @@ In this example, cpu pinning was recalculated correctly for the destination node
 As 0-1 vcpus on destination node was allocated for the local VM,
 migrated VM originally pinned to 0-1 vcpus was allocated on 2-3 vcpus
 on the destination node.
+
 * Update and finalize SRIOV port pair allocation blueprint/spec
+
+(spec) User-controlled SR-IOV ports allocation
+https://review.openstack.org/#/c/182242/
+
+(PoC) User-controlled SR-IOV ports allocation
+https://review.openstack.org/#/c/374151/
+
+passthrough_whitelist={"devname":"PF1",
+                       "physical_network":"physnet1",
+                       "pf": "pf1",
+                       "switch": "sw1",
+                       "nic": "nic1"}
+
+neutron port-create --binding:vnic_type=direct \
+                    --name a1 private
+
+neutron port-create --binding:vnic_type=direct \
+                    --name a3 private
+
+nova boot --nic port-id=a1 --nic port-id=a3 \
+   --hint pci_devices_uniq_tags=pf,switch
+
+
+1. scheduler:
+- nova.scheduler.filter_scheduler.FilterScheduler._schedule
+  - chosen_host.obj.consume_from_request(spec_obj)
+    - nova.pci.stats.PciDeviceStats.apply_requests
+
+https://github.com/openstack/nova/blob/73887d96810bf9703695d52c9f7df18bc6c29285/nova/pci/stats.py#L282
+
+Ideas:
+- if hint: go through pools and get all tags
+  then update pci_request with appropriate tags
+
+https://www.berrange.com/posts/2017/02/16/setting-up-a-nested-kvm-guest-for-developing-testing-pci-device-assignment-with-numa/
+
+Two new virtual pci devices were added:
+
+#+BEGIN_SRC text
+    <interface type='network'>
+      <mac address='52:54:00:a5:fe:4a'/>
+      <source network='default' bridge='virbr0'/>
+      <target dev='vnet2'/>
+      <model type='virtio'/>
+      <alias name='net1'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x09' function='0x0'/>
+    </interface>
+    <interface type='network'>
+      <mac address='52:54:00:31:c7:3a'/>
+      <source network='default' bridge='virbr0'/>
+      <target dev='vnet3'/>
+      <model type='virtio'/>
+      <alias name='net2'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x0a' function='0x0'/>
+    </interface>
+#+END_SRC
+
+lspci | grep -i ethernet
+
+00:03.0 Ethernet controller: Red Hat, Inc Virtio network device
+00:09.0 Ethernet controller: Red Hat, Inc Virtio network device
+00:0a.0 Ethernet controller: Red Hat, Inc Virtio network device
+
+Error starting domain: unsupported configuration: host doesn't support passthrough of host PCI devices
+
+libvirt >= 2.30 and qemu >= 2.70 for nested pci passthrough
+
+Pci devices can be ideitified with domain, bus, slot, func:
+[[[[<domain>]:]<bus>]:][<slot>][.[<func>]]
+or with vendor_id, device_id, class_id:
+[<vendor>]:[<device>][:<class>]
+
+lspci -nn
+
+00:09.0 Ethernet controller [0200]: Red Hat, Inc Virtio network device [1af4:1000]
+00:0a.0 Ethernet controller [0200]: Red Hat, Inc Virtio network device [1af4:1000]
+
+nova.conf:
+
+[pci]
+passthrough_whitelist = {"address": "00:09.0", "switch": "sw1", "networkgroup":"ng1"}
+passthrough_whitelist = {"address": "00:0a.0", "switch": "sw2", "networkgroup":"ng2"}
+alias = {"name": "network", "product_id": "1000", "vendor_id": "1af4", "device_type": "type-PCI" }
+
+On scheduler:
+<nova.pci.stats.PciDeviceStats object at 0x7fc0e61f78d0>
+ipdb> self.pci_stats.pools
+[{'count': 1, 'product_id': u'1000', u'dev_type': u'type-PCI', 'numa_node': None, 'vendor_id': u'1af4', u'switch': u'sw1', u'physical_network': u'physnet1'}, {'count': 1, 'product_id': u'100
+0', u'dev_type': u'type-PCI', 'numa_node': None, 'vendor_id': u'1af4', u'switch': u'sw2', u'physical_network': u'physnet2'}]
+
+select pci_stats from compute_nodes;
+#+BEGIN_SRC text
+{
+    "nova_object.changes": [
+        "objects"
+    ],
+    "nova_object.data": {
+        "objects": [
+            {
+                "nova_object.changes": [
+                    "count",
+                    "numa_node",
+                    "vendor_id",
+                    "product_id",
+                    "tags"
+                ],
+                "nova_object.data": {
+                    "count": 1,
+                    "numa_node": null,
+                    "product_id": "1000",
+                    "tags": {
+                        "dev_type": "type-PCI",
+                        "physical_network": "physnet1",
+                        "switch": "sw1"
+                    },
+                    "vendor_id": "1af4"
+                },
+                "nova_object.name": "PciDevicePool",
+                "nova_object.namespace": "nova",
+                "nova_object.version": "1.1"
+            },
+            {
+                "nova_object.changes": [
+                    "count",
+                    "numa_node",
+                    "vendor_id",
+                    "product_id",
+                    "tags"
+                ],
+                "nova_object.data": {
+                    "count": 1,
+                    "numa_node": null,
+                    "product_id": "1000",
+                    "tags": {
+                        "dev_type": "type-PCI",
+                        "physical_network": "physnet2",
+                        "switch": "sw2"
+                    },
+                    "vendor_id": "1af4"
+                },
+                "nova_object.name": "PciDevicePool",
+                "nova_object.namespace": "nova",
+                "nova_object.version": "1.1"
+            }
+        ]
+    },
+    "nova_object.name": "PciDevicePoolList",
+    "nova_object.namespace": "nova",
+    "nova_object.version": "1.1"
+}
+#+END_SRC
+
+openstack flavor create pci_network --ram 300 --disk 5 --vcpus 2
+openstack flavor set pci_network --property "pci_passthrough:alias"="network:2"
+openstack server create --flavor pci_network --image cirros-0.3.5-x86_64-uec $(rname.sh)
+
 * Identify main impediments for Nova scheduler/resource tracker work properly with DPDK enabled resources
-
-
