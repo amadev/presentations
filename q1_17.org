@@ -1180,13 +1180,169 @@ on the destination node.
 https://review.openstack.org/#/c/182242/
 
 (PoC) User-controlled SR-IOV ports allocation
+version with port binding
 https://review.openstack.org/#/c/374151/
 
-passthrough_whitelist={"devname":"PF1",
-                       "physical_network":"physnet1",
-                       "pf": "pf1",
-                       "switch": "sw1",
-                       "nic": "nic1"}
+version with distinc tag values
+https://review.openstack.org/#/c/448008/
+
+** Devstack test
+
+Plan for sriov test:
+1. Add fake pci devices to compute node.
+   After nova-compute restart the pci_device table should be updated
+   having fake pci devices there.
+2. Add tags via pci passthrough_whitelist.
+   1. {vendor_id: ..., switch: sw1, networkgroup: nw1}
+   2. {vendor_id: ..., switch: sw2, networkgroup: nw1}
+   3. {vendor_id: ..., switch: sw2, networkgroup: nw2}
+3. Add pci alias.
+   All fake pci devices have the same vendor_id, product_id so we can
+   use pci.alias for selecting devices.
+   pci.alias = {name: ..., vendor_id: ..., product_id: ...}
+4. Create flavor with pci_passthrough alias property.
+5. Boot server with flavor.
+6. Test results are:
+   nova-scheduler logs have messages about pci request updates.
+   nova-compute failed to load pci devices, probably, somewhere in logs
+   there is information about updated pci requests.
+
+1. Can be done without VM reboot.
+   virt-manager: double click on VM, (i) show virtual hardware details, add hardware, network
+   results can be viewed with
+   #+BEGIN_SRC sh :session shell_james
+   lspci -nn | grep -i ethernet
+   #+END_SRC
+
+   #+RESULTS:
+   : 00:03.0 Ethernet controller [0200]: Red Hat, Inc Virtio network device [1af4:1000]
+   : 00:0a.0 Ethernet controller [0200]: Realtek Semiconductor Co., Ltd. RTL-8100/8101L/8139 PCI Fast Ethernet Adapter [10ec:8139] (rev 20)
+   : 00:0b.0 Ethernet controller [0200]: Realtek Semiconductor Co., Ltd. RTL-8100/8101L/8139 PCI Fast Ethernet Adapter [10ec:8139] (rev 20)
+   : 00:0c.0 Ethernet controller [0200]: Realtek Semiconductor Co., Ltd. RTL-8100/8101L/8139 PCI Fast Ethernet Adapter [10ec:8139] (rev 20)
+
+2. Nova config.
+   #+BEGIN_SRC text
+   [DEFAULT]
+   scheduler_default_filters = RetryFilter,AvailabilityZoneFilter,RamFilter,DiskFilter,ComputeFilter,ComputeCapabilitiesFilter,ImagePropertiesFilter,ServerGroupAntiAffinityFilter,ServerGroupAffinityFilter,SameHostFilter,DifferentHostFilter,PciPassthroughFilter
+
+   [pci]
+   passthrough_whitelist = {"address": "00:0a.0", "switch": "sw1", "networkgroup":"nw1"}
+   passthrough_whitelist = {"address": "00:0b.0", "switch": "sw2", "networkgroup":"nw1"}
+   passthrough_whitelist = {"address": "00:0c.0", "switch": "sw2", "networkgroup":"nw2"}
+   alias = {"name": "network", "vendor_id": "10ec", "product_id": "8139", "device_type": "type-PCI"}
+   #+END_SRC
+   nova-api, nova-compute, nova-scheduler have to be restarted
+
+   #+BEGIN_SRC text
+   select * from pci_devices;
+   +---------------------+------------+------------+---------+----+-----------------+--------------+------------+-----------+----------+------------------+-----------------+-----------+------------+---------------+------------+-----------+-------------+
+   | created_at          | updated_at | deleted_at | deleted | id | compute_node_id | address      | product_id | vendor_id | dev_type | dev_id           | label           | status    | extra_info | instance_uuid | request_id | numa_node | parent_addr |
+   +---------------------+------------+------------+---------+----+-----------------+--------------+------------+-----------+----------+------------------+-----------------+-----------+------------+---------------+------------+-----------+-------------+
+   | 2017-05-22 10:24:13 | NULL       | NULL       |       0 |  1 |               1 | 0000:00:0a.0 | 8139       | 10ec      | type-PCI | pci_0000_00_0a_0 | label_10ec_8139 | available | {}         | NULL          | NULL       |      NULL | NULL        |
+   | 2017-05-22 10:24:13 | NULL       | NULL       |       0 |  2 |               1 | 0000:00:0b.0 | 8139       | 10ec      | type-PCI | pci_0000_00_0b_0 | label_10ec_8139 | available | {}         | NULL          | NULL       |      NULL | NULL        |
+   | 2017-05-22 10:24:13 | NULL       | NULL       |       0 |  3 |               1 | 0000:00:0c.0 | 8139       | 10ec      | type-PCI | pci_0000_00_0c_0 | label_10ec_8139 | available | {}         | NULL          | NULL       |      NULL | NULL        |
+   +---------------------+------------+------------+---------+----+-----------------+--------------+------------+-----------+----------+------------------+-----------------+-----------+------------+---------------+------------+-----------+-------------+
+   3 rows in set (0,00 sec)
+
+   select pci_stats from compute_nodes;
+   +---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | pci_stats                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+   +---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   |
+   {
+       "nova_object.changes": [
+           "objects"
+       ],
+       "nova_object.data": {
+           "objects": [
+               {
+                   "nova_object.changes": [
+                       "count",
+                       "numa_node",
+                       "vendor_id",
+                       "product_id",
+                       "tags"
+                   ],
+                   "nova_object.data": {
+                       "count": 1,
+                       "numa_node": null,
+                       "product_id": "8139",
+                       "tags": {
+                           "dev_type": "type-PCI",
+                           "networkgroup": "nw1",
+                           "switch": "sw1"
+                       },
+                       "vendor_id": "10ec"
+                   },
+                   "nova_object.name": "PciDevicePool",
+                   "nova_object.namespace": "nova",
+                   "nova_object.version": "1.1"
+               },
+               {
+                   "nova_object.changes": [
+                       "count",
+                       "numa_node",
+                       "vendor_id",
+                       "product_id",
+                       "tags"
+                   ],
+                   "nova_object.data": {
+                       "count": 1,
+                       "numa_node": null,
+                       "product_id": "8139",
+                       "tags": {
+                           "dev_type": "type-PCI",
+                           "networkgroup": "nw1",
+                           "switch": "sw2"
+                       },
+                       "vendor_id": "10ec"
+                   },
+                   "nova_object.name": "PciDevicePool",
+                   "nova_object.namespace": "nova",
+                   "nova_object.version": "1.1"
+               },
+               {
+                   "nova_object.changes": [
+                       "count",
+                       "numa_node",
+                       "vendor_id",
+                       "product_id",
+                       "tags"
+                   ],
+                   "nova_object.data": {
+                       "count": 1,
+                       "numa_node": null,
+                       "product_id": "8139",
+                       "tags": {
+                           "dev_type": "type-PCI",
+                           "networkgroup": "nw2",
+                           "switch": "sw2"
+                       },
+                       "vendor_id": "10ec"
+                   },
+                   "nova_object.name": "PciDevicePool",
+                   "nova_object.namespace": "nova",
+                   "nova_object.version": "1.1"
+               }
+           ]
+       },
+       "nova_object.name": "PciDevicePoolList",
+       "nova_object.namespace": "nova",
+       "nova_object.version": "1.1"
+   }
+   |
+   +---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   1 row in set (0,00 sec)
+   #+END_SRC
+
+4. Create flavor.
+   openstack flavor create pci_network --ram 300 --disk 5 --vcpus 2
+   openstack flavor set pci_network --property "pci_passthrough:alias"="network:2"
+
+5. Boot server.
+   openstack server create --flavor pci_network --image cirros-0.3.5-x86_64-disk $(rname.sh)
+
+** Neutron ports
 
 neutron port-create --binding:vnic_type=direct \
                     --name a1 private
@@ -1197,138 +1353,38 @@ neutron port-create --binding:vnic_type=direct \
 nova boot --nic port-id=a1 --nic port-id=a3 \
    --hint pci_devices_uniq_tags=pf,switch
 
+sriov config https://docs.openstack.org/ocata/networking-guide/config-sriov.html#create-virtual-functions-compute
 
-1. scheduler:
-- nova.scheduler.filter_scheduler.FilterScheduler._schedule
-  - chosen_host.obj.consume_from_request(spec_obj)
-    - nova.pci.stats.PciDeviceStats.apply_requests
-
-https://github.com/openstack/nova/blob/73887d96810bf9703695d52c9f7df18bc6c29285/nova/pci/stats.py#L282
-
-Ideas:
-- if hint: go through pools and get all tags
-  then update pci_request with appropriate tags
-
-https://www.berrange.com/posts/2017/02/16/setting-up-a-nested-kvm-guest-for-developing-testing-pci-device-assignment-with-numa/
-
-Two new virtual pci devices were added:
-
-#+BEGIN_SRC text
-    <interface type='network'>
-      <mac address='52:54:00:a5:fe:4a'/>
-      <source network='default' bridge='virbr0'/>
-      <target dev='vnet2'/>
-      <model type='virtio'/>
-      <alias name='net1'/>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x09' function='0x0'/>
-    </interface>
-    <interface type='network'>
-      <mac address='52:54:00:31:c7:3a'/>
-      <source network='default' bridge='virbr0'/>
-      <target dev='vnet3'/>
-      <model type='virtio'/>
-      <alias name='net2'/>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x0a' function='0x0'/>
-    </interface>
-#+END_SRC
-
-lspci | grep -i ethernet
-
-00:03.0 Ethernet controller: Red Hat, Inc Virtio network device
-00:09.0 Ethernet controller: Red Hat, Inc Virtio network device
-00:0a.0 Ethernet controller: Red Hat, Inc Virtio network device
+** Pci passthrough for nested kvm
 
 Error starting domain: unsupported configuration: host doesn't support passthrough of host PCI devices
 
 libvirt >= 2.30 and qemu >= 2.70 for nested pci passthrough
+
+https://www.berrange.com/posts/2017/02/16/setting-up-a-nested-kvm-guest-for-developing-testing-pci-device-assignment-with-numa/
+
+** Convert lspci -> passthrough white list
+
+lspci -nn
+
+00:0c.0 Ethernet controller [0200]: Realtek Semiconductor Co., Ltd. RTL-8100/8101L/8139 PCI Fast Ethernet Adapter [10ec:8139] (rev 20)
+
+00 - domain
+0c - bus
+0 - slot
+
+10ec - vendor_id
+8139 - product_id
+
+passthrough_whitelist = {"vendor_id": "10ec", "product_id": "8139"}
+or
+passthrough_whitelist = {"address": "00:0c.0"}
 
 Pci devices can be ideitified with domain, bus, slot, func:
 [[[[<domain>]:]<bus>]:][<slot>][.[<func>]]
 or with vendor_id, device_id, class_id:
 [<vendor>]:[<device>][:<class>]
 
-lspci -nn
 
-00:09.0 Ethernet controller [0200]: Red Hat, Inc Virtio network device [1af4:1000]
-00:0a.0 Ethernet controller [0200]: Red Hat, Inc Virtio network device [1af4:1000]
-
-nova.conf:
-
-[pci]
-passthrough_whitelist = {"address": "00:09.0", "switch": "sw1", "networkgroup":"ng1"}
-passthrough_whitelist = {"address": "00:0a.0", "switch": "sw2", "networkgroup":"ng2"}
-alias = {"name": "network", "product_id": "1000", "vendor_id": "1af4", "device_type": "type-PCI" }
-
-On scheduler:
-<nova.pci.stats.PciDeviceStats object at 0x7fc0e61f78d0>
-ipdb> self.pci_stats.pools
-[{'count': 1, 'product_id': u'1000', u'dev_type': u'type-PCI', 'numa_node': None, 'vendor_id': u'1af4', u'switch': u'sw1', u'physical_network': u'physnet1'}, {'count': 1, 'product_id': u'100
-0', u'dev_type': u'type-PCI', 'numa_node': None, 'vendor_id': u'1af4', u'switch': u'sw2', u'physical_network': u'physnet2'}]
-
-select pci_stats from compute_nodes;
-#+BEGIN_SRC text
-{
-    "nova_object.changes": [
-        "objects"
-    ],
-    "nova_object.data": {
-        "objects": [
-            {
-                "nova_object.changes": [
-                    "count",
-                    "numa_node",
-                    "vendor_id",
-                    "product_id",
-                    "tags"
-                ],
-                "nova_object.data": {
-                    "count": 1,
-                    "numa_node": null,
-                    "product_id": "1000",
-                    "tags": {
-                        "dev_type": "type-PCI",
-                        "physical_network": "physnet1",
-                        "switch": "sw1"
-                    },
-                    "vendor_id": "1af4"
-                },
-                "nova_object.name": "PciDevicePool",
-                "nova_object.namespace": "nova",
-                "nova_object.version": "1.1"
-            },
-            {
-                "nova_object.changes": [
-                    "count",
-                    "numa_node",
-                    "vendor_id",
-                    "product_id",
-                    "tags"
-                ],
-                "nova_object.data": {
-                    "count": 1,
-                    "numa_node": null,
-                    "product_id": "1000",
-                    "tags": {
-                        "dev_type": "type-PCI",
-                        "physical_network": "physnet2",
-                        "switch": "sw2"
-                    },
-                    "vendor_id": "1af4"
-                },
-                "nova_object.name": "PciDevicePool",
-                "nova_object.namespace": "nova",
-                "nova_object.version": "1.1"
-            }
-        ]
-    },
-    "nova_object.name": "PciDevicePoolList",
-    "nova_object.namespace": "nova",
-    "nova_object.version": "1.1"
-}
-#+END_SRC
-
-openstack flavor create pci_network --ram 300 --disk 5 --vcpus 2
-openstack flavor set pci_network --property "pci_passthrough:alias"="network:2"
-openstack server create --flavor pci_network --image cirros-0.3.5-x86_64-uec $(rname.sh)
 
 * Identify main impediments for Nova scheduler/resource tracker work properly with DPDK enabled resources
