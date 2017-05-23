@@ -16,6 +16,11 @@ def parse(fn):
         row['author'] = detail['owner']['username']
         row['verified'] = int(detail['labels']['Verified'].get('value', 0))
         row['code_review'] = int(detail['labels']['Code-Review'].get('value', 0))
+        if row['code_review'] == 0:
+            for item in detail['labels']['Code-Review']['all']:
+                if item['value']:
+                    row['code_review'] = item['value']
+                    break
         for field in ("project", "branch", "topic",
                       "subject", "status", "mergeable",
                       "insertions", "deletions"):
