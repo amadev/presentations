@@ -1,3 +1,5 @@
+* Initial structure
+
 Create database.
 
 #+BEGIN_SRC sqlite :db changes.db
@@ -112,9 +114,22 @@ Plot stat.
 
 [[review_stat.png]]
 
-#+BEGIN_SRC sqlite :db changes.db :results replace
-select * from change
-where import_id = (select max(id) from import)
-limit 10;
+#+BEGIN_SRC sqlite :db ~/org/presentations/gerrit_graph/changes.db :results replace
+select * from import order by id desc limit 1;
+#+END_SRC
 
+#+RESULTS:
+| 73 | 2017-03-01 09:02:41.064042 |
+
+* Current review
+
+#+BEGIN_SRC sqlite :db ~/org/presentations/gerrit_graph/changes.db :results replace
+select * from change
+ where import_id = (select max(id) from import)
+and verified > 0 and code_review = 0
+and branch not like 'stable%'
+and subject not like 'WIP%'
+and subject not like 'DNM%'
+and subject not like 'POC%'
+limit 40;
 #+END_SRC
