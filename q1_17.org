@@ -644,8 +644,11 @@ As we change nova version it's better to re-install devstack
 from scratch (but not necessary).
 
 #+BEGIN_SRC sh
+cd ~/m/devstack
+time ./unstack.sh &> /tmp/unstack.log
 time ./clean.sh &> /tmp/clean.log
-cp devstack/local.conf .
+cp local.conf ..
+cd ..
 rm -rf devstack
 sudo rm -rf /opt/stack
 pip freeze | grep -v "^-e" | sudo xargs pip uninstall -y
@@ -1338,22 +1341,15 @@ Plan for sriov test:
 4. Create flavor.
    openstack flavor create pci_network --ram 300 --disk 5 --vcpus 2
    openstack flavor set pci_network --property "pci_passthrough:alias"="network:2"
+   openstack flavor set pci_network --property "pci_distinct_tags"="switch,networkgroup"
 
 5. Boot server.
    openstack server create --flavor pci_network --image cirros-0.3.5-x86_64-disk $(rname.sh)
 
-** Neutron ports
 
-neutron port-create --binding:vnic_type=direct \
-                    --name a1 private
+** sriov config
 
-neutron port-create --binding:vnic_type=direct \
-                    --name a3 private
-
-nova boot --nic port-id=a1 --nic port-id=a3 \
-   --hint pci_devices_uniq_tags=pf,switch
-
-sriov config https://docs.openstack.org/ocata/networking-guide/config-sriov.html#create-virtual-functions-compute
+https://docs.openstack.org/ocata/networking-guide/config-sriov.html#create-virtual-functions-compute
 
 ** Pci passthrough for nested kvm
 
@@ -1386,5 +1382,30 @@ or with vendor_id, device_id, class_id:
 [<vendor>]:[<device>][:<class>]
 
 
+** Sr-iov lab test
+
+- Update nova.conf
+
+  passthrough_whitelist = {"address": "*:81:10.*", "switch": "sw1", "networkgroup":"nw1", "physical_network":"physnet2"}
+  passthrough_whitelist = {"address": "*:81:11.*", "switch": "sw2", "networkgroup":"nw1", "physical_network":"physnet2"}
+  passthrough_whitelist = {"address": "*:81:12.*", "switch": "sw2", "networkgroup":"nw2", "physical_network":"physnet2"}
+
+- Reload compute
+
+- Update flavor properties
+
+  openstack flavor set PCI_FLAVOR --property "pci_distinct_tags"="switch,networkgroup"
+
+- Create neutron ports
+
+  neutron port-create --binding:vnic_type=direct \
+                      --name a1 private
+
+  neutron port-create --binding:vnic_type=direct \
+                      --name a2 private
+
+- Boot instance
+
+  nova boot --nic port-id=a1 --nic port-id=a3 --flavor PCI_FLAVOR --image IMAGE NAME
 
 * Identify main impediments for Nova scheduler/resource tracker work properly with DPDK enabled resources
