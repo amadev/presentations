@@ -1,4 +1,11 @@
-* TLS for mcp
+#+TITLE: TLS for MCP
+#+DATE: 2017-07-25
+#+AUTHOR: Andrey Volkov
+#+EMAIL: avolkov@mirantis.com
+#+OPTIONS: ^:nil
+#+OPTIONS: f:t
+
+* TLS for MCP
 
 Plan is the following:
 - Make manual haproxy with TLS setup on the all-in-one host
@@ -10,9 +17,9 @@ Plan is the following:
 
 ** Manual setup on all-in-one host
 
-Given: we have host named "mcp" deploed by mcp-virtual-aio model [1],
+Given: we have host named "mcp" deploed by mcp-virtual-aio model [fn:1],
 with ip address: 172.16.60.16,
-additional info about the deployment process can be found in [2], [3].
+additional info about the deployment process can be found in [fn:2], [fn:3].
 
 *** Self-signed certificate generation
 
@@ -63,7 +70,7 @@ sudo mv /tmp/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 *** HAproxy config update
 
-haproxy is set up in the TLS offloading mode [4].
+haproxy is set up in the TLS offloading mode [fn:4].
 On external ip it provides ports in tls mode and proxies it to the
 services listening localhost ports. There should not be ports with
 unencrypted traffic available or they must redirect to TLS ports at
@@ -358,7 +365,10 @@ X-Auth-Token: gAAAAABZdyeeOCl_fA8EJGXHDZpem3VL6xPrKowcV4pLvUMYAt7k8SeFGEhBnFduDu
 
 ** Links
 
-[1] https://gerrit.mcp.mirantis.net/#/admin/projects/salt-models/mcp-virtual-aio
-[2] https://docs.google.com/document/d/18y1SVDYiULpTS4B5PeJ3rl82GseOFrWtAc-aqVCa4Wo/edit#heading=h.vtsb4am9aysb
-[3] https://github.com/Alrem/aio
-[4] https://www.haproxy.com/doc/aloha/7.0/deployment_guides/tls_layouts.html#ssl-tls-offloading
+[fn:1] https://gerrit.mcp.mirantis.net/#/admin/projects/salt-models/mcp-virtual-aio
+
+[fn:2] https://docs.google.com/document/d/18y1SVDYiULpTS4B5PeJ3rl82GseOFrWtAc-aqVCa4Wo/edit#heading=h.vtsb4am9aysb
+
+[fn:3] https://github.com/Alrem/aio
+
+[fn:4] https://www.haproxy.com/doc/aloha/7.0/deployment_guides/tls_layouts.html#ssl-tls-offloading
