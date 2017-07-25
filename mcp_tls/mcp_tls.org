@@ -77,7 +77,6 @@ sudo apt install haproxy
 cat /etc/haproxy/haproxy.cfg
 #+END_SRC
 
-#+RESULTS:
 #+begin_example
 global
 	log /dev/log	local0
@@ -303,7 +302,6 @@ OS_AUTH_URL must be updated appropriately.
 cat /root/keystonercv3
 #+END_SRC
 
-#+RESULTS:
 #+begin_example
 
 export OS_IDENTITY_API_VERSION=3
