@@ -1,0 +1,366 @@
+* TLS for mcp
+
+Plan is the following:
+- Make manual haproxy with TLS setup on the all-in-one host
+- Make changes in formulas to get TLS support available,
+  that should be done in iterativa manner: small change in formulas
+  and test with mcp-virtual-aio model. Final state should be quite the same
+  as in the previous manual setup.
+- Update mcp-virtual-lab model and test HA haproxy + https.
+
+** Manual setup on all-in-one host
+
+Given: we have host named "mcp" deploed by mcp-virtual-aio model [1],
+with ip address: 172.16.60.16,
+additional info about the deployment process can be found in [2], [3].
+
+*** Self-signed certificate generation
+
+**** On mcp
+
+#+BEGIN_SRC text
+sudo mkdir /etc/ssl/aio
+sudo openssl genrsa -out /etc/ssl/aio/aio.key 1024
+sudo openssl req -new -key /etc/ssl/aio/aio.key \
+                 -out /etc/ssl/aio/aio.csr
+> Country Name (2 letter code) [AU]:
+> State or Province Name (full name) [Some-State]:
+> Locality Name (eg, city) []:
+> Organization Name (eg, company) [Internet Widgits Pty Ltd]:
+> Organizational Unit Name (eg, section) []:
+> Common Name (e.g. server FQDN or YOUR name) []: 172.16.60.16
+> Email Address []:
+
+> Please enter the following 'extra' attributes to be sent with your certificate request
+> A challenge password []:
+> An optional company name []:
+sudo openssl x509 -req -days 365 -in /etc/ssl/aio/aio.csr \
+                  -signkey /etc/ssl/aio/aio.key \
+                  -out /etc/ssl/aio/aio.crt
+
+sudo cat /etc/ssl/aio/aio.crt /etc/ssl/aio/aio.key \
+         | sudo tee /etc/ssl/aio/aio.pem
+#+END_SRC
+
+To make the ca cert available for the python request library
+/etc/ssl/certs/ca-certificates.crt should be updated.
+
+#+BEGIN_SRC sh
+mv /etc/ssl/aio/aio.crt /tmp/aio.crt
+cat /etc/ssl/certs/ca-certificates.crt /tmp/aio.crt > /tmp/ca-certificates.crt
+sudo mv /tmp/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+#+END_SRC
+
+**** On client
+
+As certificate is self-signed we need to copy ca cert file to the client.
+
+#+BEGIN_SRC sh
+scp mcp:/etc/ssl/aio/aio.crt /tmp/aio.crt
+cat /etc/ssl/certs/ca-certificates.crt /tmp/aio.crt > /tmp/ca-certificates.crt
+sudo mv /tmp/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+#+END_SRC
+
+*** HAproxy config update
+
+haproxy is set up in the TLS offloading mode [4].
+On external ip it provides ports in tls mode and proxies it to the
+services listening localhost ports. There should not be ports with
+unencrypted traffic available or they must redirect to TLS ports at
+least.
+
+#+BEGIN_SRC sh
+sudo apt install haproxy
+#+END_SRC
+
+#+BEGIN_SRC sh :dir /ssh:mcp:
+cat /etc/haproxy/haproxy.cfg
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+global
+	log /dev/log	local0
+	log /dev/log	local1 notice
+	chroot /var/lib/haproxy
+        stats socket /run/haproxy/admin.sock mode 660 level admin
+        #stats socket 172.16.60.16:9000
+	stats timeout 30s
+	user haproxy
+	group haproxy
+	daemon
+
+	# Default SSL material locations
+	ca-base /etc/ssl/certs
+	crt-base /etc/ssl/private
+
+	# Default ciphers to use on SSL-enabled listening sockets.
+	# For more information, see ciphers(1SSL). This list is from:
+	#  https://hynek.me/articles/hardening-your-web-servers-ssl-ciphers/
+	ssl-default-bind-ciphers ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:ECDH+3DES:DH+3DES:RSA+AESGCM:RSA+AES:RSA+3DES:!aNULL:!MD5:!DSS
+        ssl-default-bind-options no-sslv3
+        # number of simultanious connections
+        maxconn 2048
+        # size of parameters to generate Diffie-Hellman Exchange key
+        tune.ssl.default-dh-param 2048
+
+defaults
+	log	global
+	mode	http
+	option	httplog
+	option	dontlognull
+        timeout connect 5000
+        timeout client  50000
+        timeout server  50000
+	errorfile 400 /etc/haproxy/errors/400.http
+	errorfile 403 /etc/haproxy/errors/403.http
+	errorfile 408 /etc/haproxy/errors/408.http
+	errorfile 500 /etc/haproxy/errors/500.http
+	errorfile 502 /etc/haproxy/errors/502.http
+	errorfile 503 /etc/haproxy/errors/503.http
+	errorfile 504 /etc/haproxy/errors/504.http
+        # set X-Forwarded-For header
+        option forwardfor
+        # close connection with server
+        option http-server-close
+
+listen stats
+        bind  172.16.60.16:1936
+        stats enable
+        stats hide-version
+        stats scope .
+        stats realm Haproxy\ Statistics
+        stats uri /
+        stats auth stats:stats
+
+
+frontend auth_admin_cluster_frontend_https
+        bind 172.16.60.16:35357 ssl crt /etc/ssl/aio/aio.pem
+        http-request set-header X-Forwarded-Proto https
+        default_backend auth_admin_cluster_backend
+
+backend auth_admin_cluster_backend
+        server controller1 127.0.0.1:35357 check
+
+
+frontend image_admin_cluster_frontend_https
+        bind 172.16.60.16:9292 ssl crt /etc/ssl/aio/aio.pem
+        http-request set-header X-Forwarded-Proto https
+        default_backend image_admin_cluster_backend
+
+backend image_admin_cluster_backend
+        server controller1 127.0.0.1:9292 check
+
+
+frontend volume_admin_cluster_frontend_https
+        bind 172.16.60.16:8776 ssl crt /etc/ssl/aio/aio.pem
+        http-request set-header X-Forwarded-Proto https
+        default_backend volume_admin_cluster_backend
+
+backend volume_admin_cluster_backend
+        server controller1 127.0.0.1:8776 check
+
+
+frontend ec2_admin_cluster_frontend_https
+        bind 172.16.60.16:8773 ssl crt /etc/ssl/aio/aio.pem
+        http-request set-header X-Forwarded-Proto https
+        default_backend ec2_admin_cluster_backend
+
+backend ec2_admin_cluster_backend
+        server controller1 127.0.0.1:8773 check
+
+
+frontend placement_admin_cluster_frontend_https
+        bind 172.16.60.16:8778 ssl crt /etc/ssl/aio/aio.pem
+        http-request set-header X-Forwarded-Proto https
+        default_backend placement_admin_cluster_backend
+
+backend placement_admin_cluster_backend
+        server controller1 127.0.0.1:8778 check
+
+
+frontend identity_admin_cluster_frontend_https
+        bind 172.16.60.16:5000 ssl crt /etc/ssl/aio/aio.pem
+        http-request set-header X-Forwarded-Proto https
+        default_backend identity_admin_cluster_backend
+
+backend identity_admin_cluster_backend
+        server controller1 127.0.0.1:5000 check
+
+
+frontend compute_admin_cluster_frontend_https
+        bind 172.16.60.16:8774 ssl crt /etc/ssl/aio/aio.pem
+        http-request set-header X-Forwarded-Proto https
+        default_backend compute_admin_cluster_backend
+
+backend compute_admin_cluster_backend
+        server controller1 127.0.0.1:8774 check
+
+
+frontend network_admin_cluster_frontend_https
+        bind 172.16.60.16:9696 ssl crt /etc/ssl/aio/aio.pem
+        http-request set-header X-Forwarded-Proto https
+        default_backend network_admin_cluster_backend
+
+backend network_admin_cluster_backend
+        server controller1 127.0.0.1:9696 check
+
+
+frontend volumev2_admin_cluster_frontend_https
+        bind 172.16.60.16:8776 ssl crt /etc/ssl/aio/aio.pem
+        http-request set-header X-Forwarded-Proto https
+        default_backend volumev2_admin_cluster_backend
+
+backend volumev2_admin_cluster_backend
+        server controller1 127.0.0.1:8776 check
+
+
+frontend compute_legacy_admin_cluster_frontend_https
+        bind 172.16.60.16:8774 ssl crt /etc/ssl/aio/aio.pem
+        http-request set-header X-Forwarded-Proto https
+        default_backend compute_legacy_admin_cluster_backend
+
+backend compute_legacy_admin_cluster_backend
+        server controller1 127.0.0.1:8774 check
+
+
+frontend orchestration_admin_cluster_frontend_https
+        bind 172.16.60.16:8004 ssl crt /etc/ssl/aio/aio.pem
+        http-request set-header X-Forwarded-Proto https
+        default_backend orchestration_admin_cluster_backend
+
+backend orchestration_admin_cluster_backend
+        server controller1 127.0.0.1:8004 check
+#+end_example
+
+*** Keystone endpoints update
+
+This doc desribes the hacky way, in reality it should be done with
+openstack enpoint commands.
+
+#+BEGIN_SRC sql
+UPDATE endpoint e
+SET e.url = replace(e.url, 'http://127.0.0.1', 'https://172.16.60.16')
+WHERE e.interface in ('public', 'internal');
+
+Rows matched: 22  Changed: 22  Warnings: 0
+
+SELECT s.type,
+       e.interface,
+       e.url
+FROM endpoint e
+JOIN service s ON e.service_id = s.id
+WHERE e.interface in ('public', 'internal');
+
+SELECT s.type,
+       e.interface,
+       e.url
+FROM endpoint e
+JOIN service s ON e.service_id = s.id
+WHERE e.interface in ('public', 'internal');
+
++----------------+-----------+-----------------------------------------------+
+| type           | interface | url                                           |
++----------------+-----------+-----------------------------------------------+
+| ec2            | public    | https://172.16.60.16:8773/services/Cloud      |
+| ec2            | internal  | https://172.16.60.16:8773/services/Cloud      |
+| orchestration  | public    | https://172.16.60.16:8004/v1/%(project_id)s   |
+| orchestration  | internal  | https://172.16.60.16:8004/v1/%(project_id)s   |
+| volumev2       | internal  | https://172.16.60.16:8776/v2/$(project_id)s   |
+| volumev2       | public    | https://172.16.60.16:8776/v2/$(project_id)s   |
+| image          | internal  | https://172.16.60.16:9292                     |
+| image          | public    | https://172.16.60.16:9292                     |
+| volume         | internal  | https://172.16.60.16:8776/v1/$(project_id)s   |
+| volume         | public    | https://172.16.60.16:8776/v1/$(project_id)s   |
+| cloudformation | public    | https://172.16.60.16:8000/v1                  |
+| cloudformation | internal  | https://172.16.60.16:8000/v1                  |
+| compute        | internal  | https://172.16.60.16:8774/v2.1/$(project_id)s |
+| compute        | public    | https://172.16.60.16:8774/v2.1/$(project_id)s |
+| placement      | public    | https://172.16.60.16:8778                     |
+| placement      | internal  | https://172.16.60.16:8778                     |
+| network        | public    | https://172.16.60.16:9696/                    |
+| network        | internal  | https://172.16.60.16:9696/                    |
+| compute_legacy | public    | https://172.16.60.16:8774/v2/$(project_id)s   |
+| compute_legacy | internal  | https://172.16.60.16:8774/v2/$(project_id)s   |
+| identity       | public    | https://172.16.60.16:5000/v2.0                |
+| identity       | internal  | https://172.16.60.16:5000/v2.0                |
++----------------+-----------+-----------------------------------------------+
+22 rows in set (0.00 sec)
+#+END_SRC
+
+To make changes available memcache should be flushed:
+
+#+BEGIN_SRC sh
+echo 'flush_all' | nc localhost 11211
+#+END_SRC
+
+*** Testing
+
+Environment variables from /root/keystonercv3.
+OS_AUTH_URL must be updated appropriately.
+
+#+BEGIN_SRC sh :dir /ssh:mcp|sudo:mcp:
+cat /root/keystonercv3
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+
+export OS_IDENTITY_API_VERSION=3
+export OS_AUTH_URL=https://172.16.60.16:35357/v3
+export OS_PROJECT_DOMAIN_NAME=default
+export OS_USER_DOMAIN_NAME=default
+export OS_PROJECT_NAME=admin
+export OS_TENANT_NAME=admin
+export OS_USERNAME=admin
+export OS_PASSWORD=workshop
+export OS_REGION_NAME=RegionOne
+export OS_INTERFACE=public
+export OS_CACERT="/etc/ssl/certs/ca-certificates.crt"
+#+end_example
+
+After that some openstack calls should be made to test the env.
+On server side it's need to check no requests to localhost without
+X-Forwarded-Proto: https
+X-Forwarded-For: 172.16.17.27
+are made.
+
+#+BEGIN_SRC sh
+sudo tcpdump -i lo -A -s10000 '(dst port 9292
+  or dst port 8000
+  or dst port 8776
+  or dst port 8773
+  or dst port 8778
+  or dst port 5000
+  or dst port 8774
+  or dst port 9696
+  or dst port 8776
+  or dst port 8774
+  or dst port 8004)
+ and (((ip[2:2] - ((ip[0]&0xf)<<2)) - ((tcp[12]&0xf0)>>2)) != 0)'
+#+END_SRC
+
+*** Known issues
+
+Nova compute requests neutron server not honoring catalog info,
+therefore requests are still plain:
+
+#+BEGIN_SRC text
+11:57:17.874161 IP localhost.33594 > localhost.9696: Flags [P.], seq 19186:19632, ack 37242, win 3637, options [nop,nop,TS val 1295704297 ecr 1295704296], length 446
+E....~@.@.h..........:%...n........5.......
+M:..M:..GET /v2.0/ports.json?network_id=11c0be9a-8e2d-497f-8e8c-b134e0103483&device_owner=network%3Adhcp HTTP/1.1
+Host: 127.0.0.1:9696
+Connection: keep-alive
+Accept-Encoding: gzip, deflate
+Accept: application/json
+User-Agent: python-neutronclient
+X-Auth-Token: gAAAAABZdyeeOCl_fA8EJGXHDZpem3VL6xPrKowcV4pLvUMYAt7k8SeFGEhBnFduDudMAwXxetnKFnNe-4lra1Vlmj78NvRUieHSGmqq4JY4BVfRgMDYS6HbvEoGb1IH9kk0yD1khr-Cd9xv1VvBu5gkSfO_tt6P9rDAdRjQfWzZrMDlCdaMwns
+#+END_SRC
+
+
+** Links
+
+[1] https://gerrit.mcp.mirantis.net/#/admin/projects/salt-models/mcp-virtual-aio
+[2] https://docs.google.com/document/d/18y1SVDYiULpTS4B5PeJ3rl82GseOFrWtAc-aqVCa4Wo/edit#heading=h.vtsb4am9aysb
+[3] https://github.com/Alrem/aio
+[4] https://www.haproxy.com/doc/aloha/7.0/deployment_guides/tls_layouts.html#ssl-tls-offloading
