@@ -37,7 +37,7 @@ so it were excluded from resources.
 **** General idea description
 
 Common SaltStack formulas for components in the multinode deployment
-fare general enough to support plain inter-service communication and
+are general enough to support plain inter-service communication and
 TLS one as well. All changes to support TLS are done in a reclass
 model. For the testing purpose, an os-ha-ovs reclass model was used.
 
@@ -47,10 +47,11 @@ modification should be mentioned:
 - an additional Nginx server is installed per each controller node.
   Nginx terminates TLS session and makes a plain proxy request to
   an OpenStack service. To understand why that is required a previous request
-  flow should be observed: 1) request to VIP to one of the controllers;
-                           2) HAProxy makes roundroubin balancing
-                              between controllers;
-                           3) service gets a request from HAProxy.
+  flow should be observed:
+     1) request to VIP to one of the controllers;
+     2) HAProxy makes roundroubin balancing between controllers;
+     3) service gets a request from HAProxy.
+
   Making communication secure between controllers requires a TLS
   termination on services but e.g. Nova uses eventlet for
   serving request and TLS support in eventlet have some issues.
@@ -81,9 +82,9 @@ file:mcp_tls_after.jpg
 
 ***** Preparation
 
-Given: the initial environment is deployed from os-ha-ovs reclass model.
+Given: the initial environment is deployed from an os-ha-ovs reclass model.
 
-To make initial testing on cfg node:
+To make initial testing on the cfg node:
 
 - Load environment variables from ctl01:/root/keystonercv3.
 - Make bootstrap procedure and create image, flavor and test network.
@@ -116,7 +117,7 @@ regenerate the node definitions.
 #+BEGIN_SRC sh
 salt-call state.apply reclass
 salt '*' saltutil.refresh_pillar; salt '*' saltutil.sync_all
-grep tls /srv/salt/reclass/nodes/_generated/*
+grep control_tls /srv/salt/reclass/nodes/_generated/*
 #+END_SRC
 
 ***** Generate certificates
@@ -172,6 +173,7 @@ salt ctl* cmd.run 'netstat -natp | grep -i listen | grep 35357'
 salt ctl* cmd.run 'netstat -natp | grep -i listen | grep 9292'
 salt ctl* cmd.run 'netstat -natp | grep -i listen | grep 9696'
 salt ctl* cmd.run 'netstat -natp | grep -i listen | grep 8774'
+salt ctl* cmd.run 'netstat -natp | grep -i listen | grep 8778'
 #+END_SRC
 
 ***** Update HAProxy mode for particular ports
@@ -235,5 +237,3 @@ openstack network list
 openstack server list
 openstack server create --image cirros-0.3.5-x86_64-disk --flavor c1 vm1
 #+END_SRC
-
-
