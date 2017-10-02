@@ -1,0 +1,502 @@
+* Multinode MCP TLS
+
+** Prepare environment
+
+Nodes are created with the help of heat templates.
+
+git clone git@github.com:Mirantis/mk-lab-heat-templates.git
+
+source ~/openrc_mirantis_devcloud
+
+source ~/m/nova/.tox/py27/bin/activate
+
+TEMPLATE=virtual_mcp11_ovs
+STACK=avolkov
+
+openstack stack create --insecure --debug \
+  --environment "env/${TEMPLATE}.env" \
+  --template "template/${TEMPLATE}.hot" \
+  --parameter cluster_zone=mcp-oscore \
+  --parameter cluster_domain=$TEMPLATE.local \
+  "$STACK"
+
+For TLS purpose, stacklight (mcp_sl_monitor) nodes are not required,
+so it were excluded from resources.
+
+** Deploy MCP
+
+on cfg01 as root
+salt '*' test.ping
+ssh ctl01
+
+To decrease mysql memory usage default values in my.cnf were changed.
+/ssh:mmcp|sudo:root@mmcp:/usr/share/salt-formulas/env/galera/files/my.cnf
+max_connections={{ service.get('max_connections', 1000) }}
+innodb_buffer_pool_size=1000M
+
+For some reason sources for galera packages were not available on ctl*.
+salt-cp 'ctl*' * /etc/apt/sources.list.d/  # copies source files to controllers
+salt 'ctl*' cmd.run 'wget -qO - http://mirror.fuel-infra.org/mcp-repos/newton/xenial/archive-mcp1.1.key | sudo apt-key add -'
+salt 'ctl*' cmd.run 'wget -qO - http://mirror.fuel-infra.org/mcp-repos/newton/xenial/archive-mcpnewton.key | sudo apt-key add -'
+salt 'ctl*' cmd.run 'apt update'
+
+cd /srv/salt/reclass/scripts
+./core_services_install.sh
+./openstack_control_install.sh
+./ovs_compute_install.sh
+
+#+BEGIN_SRC text
+export OS_IDENTITY_API_VERSION=3
+export OS_AUTH_URL=https://172.17.48.35:35357/v3
+export OS_PROJECT_DOMAIN_NAME=Default
+export OS_USER_DOMAIN_NAME=Default
+export OS_PROJECT_NAME=admin
+export OS_TENANT_NAME=admin
+export OS_USERNAME=admin
+export OS_PASSWORD=workshop
+export OS_REGION_NAME=RegionOne
+export OS_INTERFACE=public
+export OS_CACERT="/etc/ssl/certs/ca-certificates.crt"
+#+END_SRC
+
+Добавил floating ip для prx01, в endpoint для всех типов прописан один ip: http://172.16.10.254.
+Фактически доступ идет только из внутренней сети, в которой доступен openstack_control_address: 172.16.10.254.
+
+На ctl0{1,2} на haproxy прописан биндинг на тот же ip.
+
+#+BEGIN_SRC sh :dir /ssh:mmcp-ctl01:
+cat /etc/haproxy/haproxy.cfg
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+global
+  log /dev/log  local0
+  log /dev/log  local1 notice
+  chroot /var/lib/haproxy
+  stats  socket /run/haproxy/admin.sock mode 660 level admin
+  stats timeout 30s
+  user  haproxy
+  group haproxy
+  daemon
+  pidfile  /var/run/haproxy.pid
+  spread-checks 4
+  tune.maxrewrite 1024
+  tune.bufsize 32768
+  maxconn  16000
+  # SSL options
+  ca-base /etc/haproxy/ssl
+  crt-base /etc/haproxy/ssl
+  tune.ssl.default-dh-param 2048
+  ssl-default-bind-ciphers ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA:ECDHE-RSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-RSA-AES256-SHA256:DHE-RSA-AES256-SHA:ECDHE-ECDSA-DES-CBC3-SHA:ECDHE-RSA-DES-CBC3-SHA:EDH-RSA-DES-CBC3-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:DES-CBC3-SHA:!DSS
+  ssl-default-bind-options no-sslv3 no-tls-tickets
+  ssl-default-server-ciphers ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA:ECDHE-RSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-RSA-AES256-SHA256:DHE-RSA-AES256-SHA:ECDHE-ECDSA-DES-CBC3-SHA:ECDHE-RSA-DES-CBC3-SHA:EDH-RSA-DES-CBC3-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:DES-CBC3-SHA:!DSS
+  ssl-default-server-options no-sslv3 no-tls-tickets
+
+defaults
+  log  global
+  mode http
+
+  maxconn 8000
+  option  redispatch
+  retries  3
+  stats  enable
+
+  timeout http-request 10s
+  timeout queue 10s
+  timeout connect 10s
+  timeout client 10s
+  timeout server 10s
+  timeout check 10s
+
+listen keystone_public_api
+  bind 172.16.10.254:5000
+  option  httpchk
+  option  httplog
+  option  httpclose
+  server ctl01 172.16.10.101:5000 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server ctl02 172.16.10.102:5000 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server ctl03 172.16.10.103:5000 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+
+listen nova_api
+  bind 172.16.10.254:8774
+  option  httpchk
+  option  httplog
+  option  httpclose
+  server ctl01 172.16.10.101:8774 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server ctl02 172.16.10.102:8774 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server ctl03 172.16.10.103:8774 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+
+listen nova_novnc
+  bind 172.16.10.254:6080
+  mode http
+  balance roundrobin
+  option  httplog
+  server ctl01 172.16.10.101:6080 check
+  server ctl02 172.16.10.102:6080 check
+  server ctl03 172.16.10.103:6080 check
+
+listen keystone_admin_api
+  bind 172.16.10.254:35357
+  option  httpchk
+  option  httplog
+  option  httpclose
+  server ctl01 172.16.10.101:35357 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server ctl02 172.16.10.102:35357 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server ctl03 172.16.10.103:35357 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+
+listen nova_ec2_api
+  bind 172.16.10.254:8773
+  mode http
+  balance roundrobin
+  option  httplog
+  server ctl01 172.16.10.101:8773 check
+  server ctl02 172.16.10.102:8773 check
+  server ctl03 172.16.10.103:8773 check
+
+listen glance_registry_api
+  bind 172.16.10.254:9191
+  mode http
+  balance roundrobin
+  option  httplog
+  server ctl01 172.16.10.101:9191 check
+  server ctl02 172.16.10.102:9191 check
+  server ctl03 172.16.10.103:9191 check
+
+listen nova_placement_api
+  bind 172.16.10.254:8778
+
+  mode http
+  balance roundrobin
+  option httpclose
+  option httplog
+  option httpchk
+  http-check expect status 401
+  server ctl01 172.16.10.101:8778 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server ctl02 172.16.10.102:8778 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server ctl03 172.16.10.103:8778 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+
+listen heat_cloudwatch_api
+  bind 172.16.10.254:8003
+  option  httpchk
+  option  httplog
+  option  httpclose
+  server ctl01 172.16.10.101:8003 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server ctl02 172.16.10.102:8003 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server ctl03 172.16.10.103:8003 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+
+listen cinder_api
+  bind 172.16.10.254:8776
+  option  httpchk
+  option  httplog
+  option  httpclose
+  server ctl01 172.16.10.101:8776 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server ctl02 172.16.10.102:8776 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server ctl03 172.16.10.103:8776 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+
+listen designate_api
+  bind 172.16.10.254:9001
+  option  httpchk
+  option  httplog
+  option  httpclose
+  server ctl01 172.16.10.101:9001 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server ctl02 172.16.10.102:9001 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+
+listen glance_api
+  bind 172.16.10.254:9292
+  option  httpchk
+  option  httplog
+  option  httpclose
+  server ctl01 172.16.10.101:9292 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server ctl02 172.16.10.102:9292 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server ctl03 172.16.10.103:9292 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+
+listen heat_api
+  bind 172.16.10.254:8004
+  option  httpchk
+  option  httplog
+  option  httpclose
+  server ctl01 172.16.10.101:8004 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server ctl02 172.16.10.102:8004 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server ctl03 172.16.10.103:8004 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+
+listen heat_cfn_api
+  bind 172.16.10.254:8000
+  option  httpchk
+  option  httplog
+  option  httpclose
+  server ctl01 172.16.10.101:8000 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server ctl02 172.16.10.102:8000 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server ctl03 172.16.10.103:8000 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+
+listen mysql_cluster
+  bind 172.16.10.254:3306
+  balance first
+  mode tcp
+  option httpchk
+  option tcplog
+  option clitcpka
+  option srvtcpka
+  timeout client  300s
+  timeout server  300s
+  option mysql-check user haproxy
+  server ctl01 172.16.10.101:3306 check inter 20s fastinter 2s downinter 2s rise 3 fall 3
+  server ctl02 172.16.10.102:3306 backup check inter 20s fastinter 2s downinter 2s rise 3 fall 3
+  server ctl03 172.16.10.103:3306 backup check inter 20s fastinter 2s downinter 2s rise 3 fall 3
+
+listen nova_metadata_api
+  bind 172.16.10.254:8775
+  option  httpchk
+  option  httplog
+  option  httpclose
+  server ctl01 172.16.10.101:8775 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server ctl02 172.16.10.102:8775 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server ctl03 172.16.10.103:8775 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+
+listen rabbitmq_cluster
+  bind 172.16.10.254:5672
+  balance roundrobin
+  mode tcp
+  option tcpka
+  timeout client 300s
+  timeout server 300s
+  server ctl01 172.16.10.101:5672 check inter 5000 rise 2 fall 3
+  server ctl02 172.16.10.102:5672 backup check inter 5000 rise 2 fall 3
+  server ctl03 172.16.10.103:5672 backup check inter 5000 rise 2 fall 3
+
+listen neutron_api
+  bind 172.16.10.254:9696
+  option  httpchk
+  option  httplog
+  option  httpclose
+  server ctl01 172.16.10.101:9696 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server ctl02 172.16.10.102:9696 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+  server ctl03 172.16.10.103:9696 check inter 10s fastinter 2s downinter 3s rise 3 fall 3
+#+end_example
+
+nova-api запущен на eventlet и слушает на локальном ip.
+
+#+BEGIN_SRC sh :dir /ssh:mmcp-ctl01:
+sudo netstat -natp | grep -i listen | grep 8774
+#+END_SRC
+
+#+RESULTS:
+: tcp        0      0 172.16.10.101:8774      0.0.0.0:*               LISTEN      15471/python
+: tcp        0      0 172.16.10.254:8774      0.0.0.0:*               LISTEN      32530/haproxy
+
+После изменений на 172.16.10.101 должен слушать nginx, а сервисы openstack на localhost.
+
+** Report
+
+*** Enabling TLS for inter-service communication
+
+#+TITLE: TLS for MCP
+#+DATE: 2017-10-02
+#+AUTHOR: Andrey Volkov
+#+EMAIL: avolkov@mirantis.com
+#+OPTIONS: ^:nil
+#+OPTIONS: f:t
+
+**** General idea description
+
+Common SaltStack formulas for components in the multinode deployment
+fare general enough to support plain inter-service communication and
+TLS one as well. All changes to support TLS are done in a reclass
+model. For the testing purpose, an os-ha-ovs reclass model was used.
+
+Despite on reclass model changes only there are some environment
+modification should be mentioned:
+
+- an additional Nginx server is installed per each controller node.
+  Nginx terminates TLS session and makes a plain proxy request to
+  an OpenStack service. To understand why that is required a previous request
+  flow should be observed: 1) request to VIP to one of the controllers;
+                           2) HAProxy makes roundroubin balancing
+                              between controllers;
+                           3) service gets a request from HAProxy.
+  Making communication secure between controllers requires a TLS
+  termination on services but e.g. Nova uses eventlet for
+  serving request and TLS support in eventlet have some issues.
+  Other services can be provided as WSGI-application only.
+  To make things more or less standardized it was decided to
+  add Nginx as a new component of deployment.
+
+- OpenStack services listen on localhost and Nginx listen
+  on controller IP.
+
+- HAProxy mode is changed from HTTP to TCP to make TLS connection
+  to Nginx transparently.
+
+- (Optional) Requests to controllers are made via FQDN rather
+  than IP to make it available to use a wildcard certificate.
+
+***** Schema before and after
+
+Before:
+
+file:mcp_tls_before.jpg
+
+After:
+
+file:mcp_tls_after.jpg
+
+**** Steps to reproduce
+
+***** Preparation
+
+Given: the initial environment is deployed from os-ha-ovs reclass model.
+
+To make initial testing on cfg node:
+
+- Load environment variables from ctl01:/root/keystonercv3.
+- Make bootstrap procedure and create image, flavor and test network.
+- Boot test VM from cirros image.
+
+After the smoke testing is done the TLS deploy can be started.
+In the TLS deployment, all connections from a client to services
+are encrypted. Connections between services are encrypted as well.
+
+***** Fetch reclass model with a new control_tls class
+
+#+BEGIN_SRC sh :dir /ssh:m_cfg|sudo:m_cfg:
+cd /srv/salt/reclass/classes/cluster/os-ha-ovs
+wget https://gerrit.mcp.mirantis.net/changes/8998/revisions/260b3c74c7eda52d2a3ebfcc6fa65f965fb85724/patch?zip -O patch.zip
+apt install unzip
+unzip patch.zip
+patch --strip=4 --dry-run < *.diff
+patch --strip=4 --backup < *.diff
+cat openstack/control_tls.yml
+#+END_SRC
+
+For convenience, all changes to Nginx, services, HAProxy are described
+in one file controld_tls.yml but it can be organized a different way.
+
+***** Update generated models
+
+To have a new class be applied to the required nodes we need to
+regenerate the node definitions.
+
+#+BEGIN_SRC sh
+salt-call state.apply reclass
+salt '*' saltutil.refresh_pillar; salt '*' saltutil.sync_all
+grep tls /srv/salt/reclass/nodes/_generated/*
+#+END_SRC
+
+***** Generate certificates
+
+The following generate certificates procedure must be automated with SaltStack.
+
+#+BEGIN_SRC sh
+# cat gen-cert.sh
+# mkdir -p /etc/ssl/cluster
+# openssl genrsa -out /etc/ssl/cluster/$1.key 1024
+# openssl req -new -key /etc/ssl/cluster/$1.key \
+#         -subj "/C=US/ST=Denial/L=Springfield/O=Dis/CN=$2" \
+#         -out /etc/ssl/cluster/$1.csr
+# openssl x509 -req -days 365 -in /etc/ssl/cluster/$1.csr \
+#                 -signkey /etc/ssl/cluster/$1.key \
+#                 -out /etc/ssl/cluster/$1.crt
+# cat /etc/ssl/cluster/$1.crt /etc/ssl/cluster/$1.key > /etc/ssl/cluster/$1.pem
+bash gen-cert.sh cluster '*.vsaienko-deploy-heat-os-ha-ovs-121.bud-mk.local'
+#+END_SRC
+
+***** Push certificates
+
+The following certificate distribution procedure must be automated with SaltStack.
+
+#+BEGIN_SRC sh
+salt 'ctl*' cmd.run 'mkdir -p /etc/ssl/cluster'
+salt-cp 'ctl*' /etc/ssl/cluster/cluster* /etc/ssl/cluster/
+salt -E '^(cfg|ctl).*' cmd.run 'cat /etc/ssl/cluster/cluster.crt >> /etc/ssl/certs/ca-certificates.crt'
+#+END_SRC
+
+***** Move services to the localhost
+
+#+BEGIN_SRC sh
+salt ctl* state.sls keystone
+salt ctl* state.sls glance
+salt ctl* state.sls neutron
+salt ctl* state.sls nova
+#+END_SRC
+
+***** Start Nginx on controller ip
+
+#+BEGIN_SRC sh
+salt ctl* state.sls nginx
+salt ctl* cmd.run 'mv /etc/nginx/sites-available/default /root/nginx_default_backup'
+salt ctl* state.sls nginx
+#+END_SRC
+
+***** Check services up and running
+
+#+BEGIN_SRC sh
+salt ctl* cmd.run 'netstat -natp | grep -i listen | grep 5000'
+salt ctl* cmd.run 'netstat -natp | grep -i listen | grep 35357'
+salt ctl* cmd.run 'netstat -natp | grep -i listen | grep 9292'
+salt ctl* cmd.run 'netstat -natp | grep -i listen | grep 9696'
+salt ctl* cmd.run 'netstat -natp | grep -i listen | grep 8774'
+#+END_SRC
+
+***** Update HAProxy mode for particular ports
+
+#+BEGIN_SRC sh
+salt ctl* state.sls haproxy
+#+END_SRC
+
+Also HAProxy timeout could be increased at this point to give a room
+for the TLS additional payload.
+
+***** Update endpoints in service catalog
+
+For the endpoint update localhost identity service is used.
+
+#+BEGIN_SRC sh
+export OS_IDENTITY_API_VERSION=3
+export OS_AUTH_URL=http://127.0.0.1:35357/v3
+export OS_PROJECT_DOMAIN_NAME=Default
+export OS_USER_DOMAIN_NAME=Default
+export OS_PROJECT_NAME=admin
+export OS_TENANT_NAME=admin
+export OS_USERNAME=admin
+export OS_PASSWORD=workshop
+export OS_REGION_NAME=RegionOne
+export OS_INTERFACE=internal
+export OS_CACERT="/etc/ssl/cluster/cluster.pem"
+
+CTL_HOST="ctl.vsaienko-deploy-heat-os-ha-ovs-121.bud-mk.local"
+openstack endpoint set $(openstack endpoint list --service identity --interface internal | grep identity | awk '{print $2}') --url https://$CTL_HOST:5000/v2.0
+openstack endpoint set $(openstack endpoint list --service identity --interface admin | grep identity | awk '{print $2}') --url https://$CTL_HOST:35357/v2.0
+
+openstack endpoint set $(openstack endpoint list --service glance --interface internal | grep glance | awk '{print $2}') --url https://$CTL_HOST:9292
+openstack endpoint set $(openstack endpoint list --service glance --interface admin | grep glance | awk '{print $2}') --url https://$CTL_HOST:9292
+
+openstack endpoint set $(openstack endpoint list --service neutron --interface internal | grep neutron | awk '{print $2}') --url https://$CTL_HOST:9696/
+openstack endpoint set $(openstack endpoint list --service neutron --interface admin | grep neutron | awk '{print $2}') --url https://$CTL_HOST:9696/
+
+openstack endpoint set $(openstack endpoint list --service nova --interface internal | grep nova | awk '{print $2}') --url https://$CTL_HOST:8774/v2.1/'$(project_id)s'
+openstack endpoint set $(openstack endpoint list --service nova --interface admin | grep nova | awk '{print $2}') --url https://$CTL_HOST:8774/v2.1/'$(project_id)s'
+#+END_SRC
+
+***** Make smoke testing for OpenStack functionality
+
+#+BEGIN_SRC sh
+export OS_IDENTITY_API_VERSION=3
+export OS_AUTH_URL=https://ctl.vsaienko-deploy-heat-os-ha-ovs-121.bud-mk.local:35357/v3
+export OS_PROJECT_DOMAIN_NAME=Default
+export OS_USER_DOMAIN_NAME=Default
+export OS_PROJECT_NAME=admin
+export OS_TENANT_NAME=admin
+export OS_USERNAME=admin
+export OS_PASSWORD=workshop
+export OS_REGION_NAME=RegionOne
+export OS_INTERFACE=internal
+export OS_CACERT="/etc/ssl/cluster/cluster.pem"
+
+openstack endpoint list
+openstack image list
+openstack network list
+openstack server list
+openstack server create --image cirros-0.3.5-x86_64-disk --flavor c1 vm1
+#+END_SRC
+
+
