@@ -122,12 +122,12 @@ grep control_tls /srv/salt/reclass/nodes/_generated/*
 
 ***** Generate certificates
 
-The following generate certificates procedure must be automated with SaltStack.
+The following certificate generation procedure must be automated with SaltStack.
 
 #+BEGIN_SRC sh
 # cat gen-cert.sh
 # mkdir -p /etc/ssl/cluster
-# openssl genrsa -out /etc/ssl/cluster/$1.key 1024
+# openssl genrsa -out /etc/ssl/cluster/$1.key 2048
 # openssl req -new -key /etc/ssl/cluster/$1.key \
 #         -subj "/C=US/ST=Denial/L=Springfield/O=Dis/CN=$2" \
 #         -out /etc/ssl/cluster/$1.csr
@@ -143,9 +143,9 @@ bash gen-cert.sh cluster '*.vsaienko-deploy-heat-os-ha-ovs-121.bud-mk.local'
 The following certificate distribution procedure must be automated with SaltStack.
 
 #+BEGIN_SRC sh
-salt 'ctl*' cmd.run 'mkdir -p /etc/ssl/cluster'
-salt-cp 'ctl*' /etc/ssl/cluster/cluster* /etc/ssl/cluster/
-salt -E '^(cfg|ctl).*' cmd.run 'cat /etc/ssl/cluster/cluster.crt >> /etc/ssl/certs/ca-certificates.crt'
+salt -E '^(ctl|cmp).*' cmd.run 'mkdir -p /etc/ssl/cluster'
+salt-cp -E '^(ctl|cmp).*' /etc/ssl/cluster/cluster* /etc/ssl/cluster/
+salt -E '^(cfg|ctl|cmp).*' cmd.run 'cat /etc/ssl/cluster/cluster.crt >> /etc/ssl/certs/ca-certificates.crt'
 #+END_SRC
 
 ***** Move services to the localhost
@@ -202,7 +202,7 @@ export OS_REGION_NAME=RegionOne
 export OS_INTERFACE=internal
 export OS_CACERT="/etc/ssl/cluster/cluster.pem"
 
-CTL_HOST="ctl.vsaienko-deploy-heat-os-ha-ovs-121.bud-mk.local"
+export CTL_HOST="ctl.vsaienko-deploy-heat-os-ha-ovs-121.bud-mk.local"
 openstack endpoint set $(openstack endpoint list --service identity --interface internal | grep identity | awk '{print $2}') --url https://$CTL_HOST:5000/v2.0
 openstack endpoint set $(openstack endpoint list --service identity --interface admin | grep identity | awk '{print $2}') --url https://$CTL_HOST:35357/v2.0
 
@@ -214,6 +214,15 @@ openstack endpoint set $(openstack endpoint list --service neutron --interface a
 
 openstack endpoint set $(openstack endpoint list --service nova --interface internal | grep nova | awk '{print $2}') --url https://$CTL_HOST:8774/v2.1/'$(project_id)s'
 openstack endpoint set $(openstack endpoint list --service nova --interface admin | grep nova | awk '{print $2}') --url https://$CTL_HOST:8774/v2.1/'$(project_id)s'
+
+openstack endpoint set $(openstack endpoint list --service placement --interface internal | grep placement | awk '{print $2}') --url https://$CTL_HOST:8778
+openstack endpoint set $(openstack endpoint list --service placement --interface admin | grep placement | awk '{print $2}') --url https://$CTL_HOST:8778
+#+END_SRC
+
+***** Apply TLS configurations for compute nodes
+
+#+BEGIN_SRC sh
+salt cmp* state.sls nova
 #+END_SRC
 
 ***** Make smoke testing for OpenStack functionality
@@ -237,3 +246,6 @@ openstack network list
 openstack server list
 openstack server create --image cirros-0.3.5-x86_64-disk --flavor c1 vm1
 #+END_SRC
+** Comments
+
+
