@@ -1,0 +1,457 @@
+* OpenStack SR-IOV migration/evacuation test
+
+Create cfg console.
+
+#+BEGIN_SRC elisp
+(start-ssh "shell_cfg" "qa|ssh:root@10.109.9.196")
+#+END_SRC
+
+List nodes.
+
+#+BEGIN_SRC sh :session shell_cfg
+salt '*' cmd.run 'ip a|grep 10.109.9' --no-color # management/api
+salt '*' cmd.run 'ip a|grep 10.109.1' --no-color
+#+END_SRC
+
+#+begin_example
+cmp002.sriov-neutron.local:
+        inet 10.109.9.8/24 brd 10.109.9.255 scope global br-mgmt
+
+cmp001.sriov-neutron.local:
+        inet 10.109.9.9/24 brd 10.109.9.255 scope global br-mgmt
+
+gtw01.sriov-neutron.local:
+        inet 10.109.9.7/24 brd 10.109.9.255 scope global br-mgmt
+
+kvm02.sriov-neutron.local:
+        inet 10.109.9.6/24 brd 10.109.9.255 scope global br-mgmt
+
+kvm01.sriov-neutron.local:
+        inet 10.109.9.5/24 brd 10.109.9.255 scope global br-mgmt
+
+cfg01.sriov-neutron.local:
+        inet 10.109.9.196/24 brd 10.109.9.255 scope global ens3
+
+ctl01.sriov-neutron.local:
+        inet 10.109.9.197/24 brd 10.109.9.255 scope global ens2
+ctl03.sriov-neutron.local:
+        inet 10.109.9.202/24 brd 10.109.9.255 scope global ens2
+dbs02.sriov-neutron.local:
+        inet 10.109.9.201/24 brd 10.109.9.255 scope global ens2
+
+dbs03.sriov-neutron.local:
+        inet 10.109.9.205/24 brd 10.109.9.255 scope global ens2
+
+ctl02.sriov-neutron.local:
+        inet 10.109.9.199/24 brd 10.109.9.255 scope global ens2
+dbs01.sriov-neutron.local:
+        inet 10.109.9.194/24 brd 10.109.9.255 scope global ens2
+cmp002.sriov-neutron.local:
+        inet 10.109.1.102/24 brd 10.109.1.255 scope global br-mesh
+
+cmp001.sriov-neutron.local:
+        inet 10.109.1.101/24 brd 10.109.1.255 scope global br-mesh
+        inet 10.109.1.101/24 brd 10.109.1.255 scope global ens3f1.201
+
+kvm02.sriov-neutron.local:
+        inet 10.109.1.3/24 brd 10.109.1.255 scope global br-ctl
+kvm01.sriov-neutron.local:
+        inet 10.109.1.2/24 brd 10.109.1.255 scope global br-ctl
+
+gtw01.sriov-neutron.local:
+        inet 10.109.1.6/24 brd 10.109.1.255 scope global br-mesh
+        inet 10.109.1.6/24 brd 10.109.1.255 scope global br-ctl
+        inet 10.109.1.10/32 scope global br-ctl
+dbs02.sriov-neutron.local:
+        inet 10.109.1.15/24 brd 10.109.1.255 scope global ens3
+dbs03.sriov-neutron.local:
+        inet 10.109.1.16/24 brd 10.109.1.255 scope global ens3
+ctl03.sriov-neutron.local:
+        inet 10.109.1.13/24 brd 10.109.1.255 scope global ens3
+dbs01.sriov-neutron.local:
+        inet 10.109.1.14/24 brd 10.109.1.255 scope global ens3
+        inet 10.109.1.14/32 scope global ens3
+
+ctl01.sriov-neutron.local:
+        inet 10.109.1.11/24 brd 10.109.1.255 scope global ens3
+        inet 10.109.1.10/32 scope global ens3
+ctl02.sriov-neutron.local:
+        inet 10.109.1.12/24 brd 10.109.1.255 scope global ens3
+cfg01.sriov-neutron.local:
+        inet 10.109.1.196/24 brd 10.109.1.255 scope global ens6
+#+end_example
+
+Upload ssh key.
+
+#+BEGIN_SRC sh :session shell_cfg
+salt '*' ssh.set_auth_key root 'AAAAB3NzaC1yc2EAAAADAQABAAABAQDCUd3Qs1HNKgLF1B6qFntcnv4YMvGH6l4kBRdxvUWbTBwMekSFbJ0pnILNVQ8bC7oxFyCUOY/d074BtYcGILjwAbGBNztfi+g97GJYMkwsmmKVPucOy1ojakMg0s6ketQr3AM8YA7z0sbYMP7nbioaJMPhGKai0HRM4vPMSyH/3n9vFzkH9amBZEnTB15ZiXnUzLliyBMgyDUKvEOX072soYXR9TDWvE/TwAHiZdPh6gCMl4+yCinwS7baf9JuaQXn2P9SgCyx6uigAwvfn/XEwDqKFsso+4U53vR4RyktqzdSdFcf2UBUQlRMwvISwJTnLPfBsspQTRNlGqfAP+fd' enc='rsa'
+#+END_SRC
+
+Create cmp consoles.
+
+#+BEGIN_SRC elisp
+(start-ssh "shell_cmp001" "qa|ssh:root@10.109.9.9")
+(start-ssh "shell_cmp002" "qa|ssh:root@10.109.9.8")
+#+END_SRC
+
+
+Create ctl consoles.
+
+#+BEGIN_SRC elisp
+(start-ssh "shell_ctl01" "qa|ssh:root@10.109.9.197")
+(start-ssh "shell_ctl02" "qa|ssh:root@10.109.9.199")
+(start-ssh "shell_ctl03" "qa|ssh:root@10.109.9.202")
+#+END_SRC
+
+
+Start mysql client.
+#+BEGIN_SRC elisp
+(start-ssh "sriov_mysql" "qa|ssh:root@10.109.9.197" "mysql -unova -h10.109.1.14 -plMcl6BveNzuYGHK4")
+#+END_SRC
+
+
+Show CPU.
+
+#+BEGIN_SRC sh :session shell_cfg
+salt cmp* cmd.run 'lscpu; echo vmx support $(grep vmx /proc/cpuinfo  | wc -l)' --no-color
+
+#+END_SRC
+
+#+begin_example
+cmp002.sriov-neutron.local:
+    Architecture:          x86_64
+    CPU op-mode(s):        32-bit, 64-bit
+    Byte Order:            Little Endian
+    CPU(s):                24
+    On-line CPU(s) list:   0-23
+    Thread(s) per core:    2
+    Core(s) per socket:    6
+    Socket(s):             2
+    NUMA node(s):          2
+    Vendor ID:             GenuineIntel
+    CPU family:            6
+    Model:                 63
+    Model name:            Intel(R) Xeon(R) CPU E5-2620 v3 @ 2.40GHz
+    Stepping:              2
+    CPU MHz:               2399.988
+    CPU max MHz:           3200.0000
+    CPU min MHz:           1200.0000
+    BogoMIPS:              4799.97
+    Virtualization:        VT-x
+    L1d cache:             32K
+    L1i cache:             32K
+    L2 cache:              256K
+    L3 cache:              15360K
+    NUMA node0 CPU(s):     0-5,12-17
+    NUMA node1 CPU(s):     6-11,18-23
+    Flags:                 fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid dca sse4_1 sse4_2 x2apic movbe popcnt xsave avx f16c rdrand lahf_lm abm cpuid_fault epb invpcid_single pti intel_ppin tpr_shadow vnmi flexpriority ept vpid fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm xsaveopt cqm_llc cqm_occup_llc dtherm ida arat pln pts
+    vmx support 24
+cmp001.sriov-neutron.local:
+    Architecture:          x86_64
+    CPU op-mode(s):        32-bit, 64-bit
+    Byte Order:            Little Endian
+    CPU(s):                24
+    On-line CPU(s) list:   0-23
+    Thread(s) per core:    2
+    Core(s) per socket:    6
+    Socket(s):             2
+    NUMA node(s):          2
+    Vendor ID:             GenuineIntel
+    CPU family:            6
+    Model:                 63
+    Model name:            Intel(R) Xeon(R) CPU E5-2620 v3 @ 2.40GHz
+    Stepping:              2
+    CPU MHz:               2399.885
+    CPU max MHz:           3200.0000
+    CPU min MHz:           1200.0000
+    BogoMIPS:              4799.77
+    Virtualization:        VT-x
+    L1d cache:             32K
+    L1i cache:             32K
+    L2 cache:              256K
+    L3 cache:              15360K
+    NUMA node0 CPU(s):     0-5,12-17
+    NUMA node1 CPU(s):     6-11,18-23
+    Flags:                 fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid dca sse4_1 sse4_2 x2apic movbe popcnt xsave avx f16c rdrand lahf_lm abm cpuid_fault epb invpcid_single pti intel_ppin tpr_shadow vnmi flexpriority ept vpid fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm xsaveopt cqm_llc cqm_occup_llc dtherm ida arat pln pts
+    vmx support 24
+#+end_example
+
+Show VFs, network info.
+
+#+BEGIN_SRC sh :session shell_cfg
+salt cmp* cmd.run 'echo NICs:; ls /sys/class/net/ | grep -v "\(br-\|ovs-\|lo\|virbr\|\.\|\-\)"; echo Ethernet PCIs:; lspci | grep Ethernet; echo VFs:; for i in $(ls /sys/class/net/ | grep -v "\(br-\|ovs-\|lo\|virbr\|\.\|\-\)"); do echo -n $i sriov_numvfs: ; cat /sys/class/net/$i/device/sriov_numvfs; done; for i in $(ls /sys/class/net/ | grep -v "\(br-\|ovs-\|lo\|virbr\|\.\|\-\)"); do echo -n $i sriov_totalvfs: ; cat /sys/class/net/$i/device/sriov_totalvfs; done; echo SR-IOV NIC:; ip link show ens3f1;' --no-color
+#+END_SRC
+
+#+begin_example
+cmp002.sriov-neutron.local:
+    NICs:
+    enp9s0f0
+    enp9s0f1
+    ens3f0
+    ens3f1
+    Ethernet PCIs:
+    03:00.0 Ethernet controller: Intel Corporation 82599ES 10-Gigabit SFI/SFP+ Network Connection (rev 01)
+    03:00.1 Ethernet controller: Intel Corporation 82599ES 10-Gigabit SFI/SFP+ Network Connection (rev 01)
+    03:10.1 Ethernet controller: Intel Corporation 82599 Ethernet Controller Virtual Function (rev 01)
+    03:10.3 Ethernet controller: Intel Corporation 82599 Ethernet Controller Virtual Function (rev 01)
+    03:10.5 Ethernet controller: Intel Corporation 82599 Ethernet Controller Virtual Function (rev 01)
+    03:10.7 Ethernet controller: Intel Corporation 82599 Ethernet Controller Virtual Function (rev 01)
+    03:11.1 Ethernet controller: Intel Corporation 82599 Ethernet Controller Virtual Function (rev 01)
+    03:11.3 Ethernet controller: Intel Corporation 82599 Ethernet Controller Virtual Function (rev 01)
+    03:11.5 Ethernet controller: Intel Corporation 82599 Ethernet Controller Virtual Function (rev 01)
+    03:11.7 Ethernet controller: Intel Corporation 82599 Ethernet Controller Virtual Function (rev 01)
+    03:12.1 Ethernet controller: Intel Corporation 82599 Ethernet Controller Virtual Function (rev 01)
+    03:12.3 Ethernet controller: Intel Corporation 82599 Ethernet Controller Virtual Function (rev 01)
+    0a:00.0 Ethernet controller: Intel Corporation I350 Gigabit Network Connection (rev 01)
+    0a:00.1 Ethernet controller: Intel Corporation I350 Gigabit Network Connection (rev 01)
+    VFs:
+    enp9s0f0 sriov_numvfs:0
+    enp9s0f1 sriov_numvfs:0
+    ens3f0 sriov_numvfs:0
+    ens3f1 sriov_numvfs:10
+    enp9s0f0 sriov_totalvfs:7
+    enp9s0f1 sriov_totalvfs:7
+    ens3f0 sriov_totalvfs:63
+    ens3f1 sriov_totalvfs:63
+    SR-IOV NIC:
+mtu 1500 qdisc mq master ovs-system state UP mode DEFAULT group default qlen 1000
+        link/ether 00:1b:21:89:47:91 brd ff:ff:ff:ff:ff:ff
+        vf 0 MAC 00:00:00:00:00:00, spoof checking on, link-state auto
+        vf 1 MAC 00:00:00:00:00:00, spoof checking on, link-state auto
+        vf 2 MAC 00:00:00:00:00:00, spoof checking on, link-state auto
+        vf 3 MAC 00:00:00:00:00:00, spoof checking on, link-state auto
+        vf 4 MAC 00:00:00:00:00:00, spoof checking on, link-state auto
+        vf 5 MAC 00:00:00:00:00:00, spoof checking on, link-state auto
+        vf 6 MAC 00:00:00:00:00:00, spoof checking on, link-state auto
+        vf 7 MAC fa:16:3e:ba:2b:e9, vlan 993, spoof checking on, link-state auto
+        vf 8 MAC fa:16:3e:23:90:d8, vlan 993, spoof checking on, link-state auto
+        vf 9 MAC 00:00:00:00:00:00, spoof checking on, link-state auto
+cmp001.sriov-neutron.local:
+    NICs:
+    enp10s0f1
+    enp9s0f0
+    ens3f0
+    ens3f1
+    Ethernet PCIs:
+    03:00.0 Ethernet controller: Intel Corporation 82599ES 10-Gigabit SFI/SFP+ Network Connection (rev 01)
+    03:00.1 Ethernet controller: Intel Corporation 82599ES 10-Gigabit SFI/SFP+ Network Connection (rev 01)
+    03:10.1 Ethernet controller: Intel Corporation 82599 Ethernet Controller Virtual Function (rev 01)
+    03:10.3 Ethernet controller: Intel Corporation 82599 Ethernet Controller Virtual Function (rev 01)
+    03:10.5 Ethernet controller: Intel Corporation 82599 Ethernet Controller Virtual Function (rev 01)
+    03:10.7 Ethernet controller: Intel Corporation 82599 Ethernet Controller Virtual Function (rev 01)
+    03:11.1 Ethernet controller: Intel Corporation 82599 Ethernet Controller Virtual Function (rev 01)
+    03:11.3 Ethernet controller: Intel Corporation 82599 Ethernet Controller Virtual Function (rev 01)
+    03:11.5 Ethernet controller: Intel Corporation 82599 Ethernet Controller Virtual Function (rev 01)
+    03:11.7 Ethernet controller: Intel Corporation 82599 Ethernet Controller Virtual Function (rev 01)
+    03:12.1 Ethernet controller: Intel Corporation 82599 Ethernet Controller Virtual Function (rev 01)
+    03:12.3 Ethernet controller: Intel Corporation 82599 Ethernet Controller Virtual Function (rev 01)
+    0a:00.0 Ethernet controller: Intel Corporation I350 Gigabit Network Connection (rev 01)
+    0a:00.1 Ethernet controller: Intel Corporation I350 Gigabit Network Connection (rev 01)
+    VFs:
+    enp10s0f1 sriov_numvfs:0
+    enp9s0f0 sriov_numvfs:0
+    ens3f0 sriov_numvfs:0
+    ens3f1 sriov_numvfs:10
+    enp10s0f1 sriov_totalvfs:7
+    enp9s0f0 sriov_totalvfs:7
+    ens3f0 sriov_totalvfs:63
+    ens3f1 sriov_totalvfs:63
+    SR-IOV NIC:
+mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000
+        link/ether 00:1b:21:8a:7b:19 brd ff:ff:ff:ff:ff:ff
+        vf 0 MAC 00:00:00:00:00:00, spoof checking on, link-state auto
+        vf 1 MAC 00:00:00:00:00:00, spoof checking on, link-state auto
+        vf 2 MAC 00:00:00:00:00:00, spoof checking on, link-state auto
+        vf 3 MAC 00:00:00:00:00:00, spoof checking on, link-state auto
+        vf 4 MAC 00:00:00:00:00:00, spoof checking on, link-state auto
+        vf 5 MAC 00:00:00:00:00:00, spoof checking on, link-state auto
+        vf 6 MAC 00:00:00:00:00:00, spoof checking on, link-state auto
+        vf 7 MAC fa:16:3e:ba:2b:e9, vlan 993, spoof checking on, link-state auto
+        vf 8 MAC 00:00:00:00:00:00, spoof checking on, link-state auto
+        vf 9 MAC fa:16:3e:23:90:d8, vlan 993, spoof checking on, link-state auto
+#+end_example
+
+Check iommu enabled.
+
+#+BEGIN_SRC sh :session shell_cfg
+salt cmp* cmd.run 'find /sys/kernel/iommu_groups/ -type l | head' --no-color
+#+END_SRC
+
+#+begin_example
+cmp002.sriov-neutron.local:
+    /sys/kernel/iommu_groups/55/devices/0000:03:11.3
+    /sys/kernel/iommu_groups/17/devices/0000:7f:10.1
+    /sys/kernel/iommu_groups/17/devices/0000:7f:10.6
+    /sys/kernel/iommu_groups/17/devices/0000:7f:10.0
+    /sys/kernel/iommu_groups/17/devices/0000:7f:10.7
+    /sys/kernel/iommu_groups/17/devices/0000:7f:10.5
+    /sys/kernel/iommu_groups/45/devices/0000:09:00.0
+    /sys/kernel/iommu_groups/45/devices/0000:08:00.0
+    /sys/kernel/iommu_groups/35/devices/0000:00:14.0
+    /sys/kernel/iommu_groups/7/devices/0000:ff:14.3
+    find: 'standard output': Broken pipe
+    find: write error
+cmp001.sriov-neutron.local:
+    /sys/kernel/iommu_groups/55/devices/0000:03:11.3
+    /sys/kernel/iommu_groups/17/devices/0000:7f:10.1
+    /sys/kernel/iommu_groups/17/devices/0000:7f:10.6
+    /sys/kernel/iommu_groups/17/devices/0000:7f:10.0
+    /sys/kernel/iommu_groups/17/devices/0000:7f:10.7
+    /sys/kernel/iommu_groups/17/devices/0000:7f:10.5
+    /sys/kernel/iommu_groups/45/devices/0000:09:00.0
+    /sys/kernel/iommu_groups/45/devices/0000:08:00.0
+    /sys/kernel/iommu_groups/35/devices/0000:00:14.0
+    /sys/kernel/iommu_groups/7/devices/0000:ff:14.3
+    find: 'standard output': Broken pipe
+    find: write error
+#+end_example
+
+Update nova compute conf.
+
+[DEFAULT]
+debug=true
+
+[pci]
+passthrough_whitelist = { "devname": "ens3f1", "physical_network": "physnet2"}
+
+Restart nova-compute.
+
+#+BEGIN_SRC sh :session shell_cfg
+salt cmp* cmd.run 'systemctl restart nova-compute.service' --no-color
+#+END_SRC
+
+: cmp002.sriov-neutron.local:
+: 
+: cmp001.sriov-neutron.local:
+
+Check pci devices were added successfully.
+
+#+BEGIN_SRC sh :session sriov_mysql
+select * from pci_devices;
+#+END_SRC
+
+#+begin_example
+select * from pci_devices;
+
++---------------------+---------------------+---------------------+---------+----+-----------------+--------------+------------+-----------+----------+------------------+-----------------+-----------+------------+---------------+------------+-----------+--------------+
+| created_at          | updated_at          | deleted_at          | deleted | id | compute_node_id | address      | product_id | vendor_id | dev_type | dev_id           | label           | status    | extra_info | instance_uuid | request_id | numa_node | parent_addr  |
++---------------------+---------------------+---------------------+---------+----+-----------------+--------------+------------+-----------+----------+------------------+-----------------+-----------+------------+---------------+------------+-----------+--------------+
+| 2018-02-04 09:10:01 | 2018-02-07 11:32:48 | NULL                |       0 |  1 |               2 | 0000:03:00.1 | 10fb       | 8086      | type-PF  | pci_0000_03_00_1 | label_8086_10fb | available | {}         | NULL          | NULL       |         0 | NULL         |
+| 2018-02-04 09:10:01 | 2018-02-07 11:30:49 | 2018-02-07 11:33:09 |       2 |  2 |               1 | 0000:03:00.1 | 10fb       | 8086      | type-PF  | pci_0000_03_00_1 | label_8086_10fb | available | {}         | NULL          | NULL       |         0 | NULL         |
+| 2018-02-06 15:38:27 | 2018-02-07 11:30:49 | NULL                |       0 |  3 |               1 | 0000:03:10.1 | 10ed       | 8086      | type-VF  | pci_0000_03_10_1 | label_8086_10ed | available | {}         | NULL          | NULL       |         0 | 0000:03:00.1 |
+| 2018-02-06 15:38:27 | 2018-02-07 11:30:49 | 2018-02-07 11:33:08 |       4 |  4 |               1 | 0000:03:10.3 | 10ed       | 8086      | type-VF  | pci_0000_03_10_3 | label_8086_10ed | available | {}         | NULL          | NULL       |         0 | 0000:03:00.1 |
+| 2018-02-06 15:38:27 | 2018-02-07 11:30:49 | NULL                |       0 |  5 |               1 | 0000:03:10.5 | 10ed       | 8086      | type-VF  | pci_0000_03_10_5 | label_8086_10ed | available | {}         | NULL          | NULL       |         0 | 0000:03:00.1 |
+| 2018-02-06 15:38:27 | 2018-02-07 11:30:49 | 2018-02-07 11:33:08 |       6 |  6 |               1 | 0000:03:10.7 | 10ed       | 8086      | type-VF  | pci_0000_03_10_7 | label_8086_10ed | available | {}         | NULL          | NULL       |         0 | 0000:03:00.1 |
+| 2018-02-06 15:38:27 | 2018-02-07 11:30:49 | NULL                |       0 |  7 |               1 | 0000:03:11.1 | 10ed       | 8086      | type-VF  | pci_0000_03_11_1 | label_8086_10ed | available | {}         | NULL          | NULL       |         0 | 0000:03:00.1 |
+| 2018-02-06 15:38:28 | 2018-02-07 11:30:51 | 2018-02-07 11:33:08 |       8 |  8 |               1 | 0000:03:11.3 | 10ed       | 8086      | type-VF  | pci_0000_03_11_3 | label_8086_10ed | available | {}         | NULL          | NULL       |         0 | 0000:03:00.1 |
+| 2018-02-06 15:38:28 | 2018-02-07 11:30:51 | NULL                |       0 |  9 |               1 | 0000:03:11.5 | 10ed       | 8086      | type-VF  | pci_0000_03_11_5 | label_8086_10ed | available | {}         | NULL          | NULL       |         0 | 0000:03:00.1 |
+| 2018-02-07 11:09:25 | 2018-02-07 11:32:48 | NULL                |       0 | 10 |               2 | 0000:03:10.1 | 10ed       | 8086      | type-VF  | pci_0000_03_10_1 | label_8086_10ed | available | {}         | NULL          | NULL       |         0 | 0000:03:00.1 |
+| 2018-02-07 11:09:25 | 2018-02-07 11:32:50 | NULL                |       0 | 11 |               2 | 0000:03:10.3 | 10ed       | 8086      | type-VF  | pci_0000_03_10_3 | label_8086_10ed | available | {}         | NULL          | NULL       |         0 | 0000:03:00.1 |
+| 2018-02-07 11:09:25 | 2018-02-07 11:32:50 | NULL                |       0 | 12 |               2 | 0000:03:10.5 | 10ed       | 8086      | type-VF  | pci_0000_03_10_5 | label_8086_10ed | available | {}         | NULL          | NULL       |         0 | 0000:03:00.1 |
+| 2018-02-07 11:09:25 | 2018-0
+2-07 11:32:50 | NULL                |       0 | 13 |               2 | 0000:03:10.7 | 10ed       | 8086      | type-VF  | pci_0000_03_10_7 | label_8086_10ed | available | {}         | NULL          | NULL       |         0 | 0000:03:00.1 |
+| 2018-02-07 11:09:25 | 2018-02-07 11:32:50 | NULL                |       0 | 14 |               2 | 0000:03:11.1 | 10ed       | 8086      | type-VF  | pci_0000_03_11_1 | label_8086_10ed | available | {}         | NULL          | NULL       |         0 | 0000:03:00.1 |
+| 2018-02-07 11:09:25 | 2018-02-07 11:32:50 | NULL                |       0 | 15 |               2 | 0000:03:11.3 | 10ed       | 8086      | type-VF  | pci_0000_03_11_3 | label_8086_10ed | available | {}         | NULL          | NULL       |         0 | 0000:03:00.1 |
+| 2018-02-07 11:09:25 | 2018-02-07 11:32:50 | NULL                |       0 | 16 |               2 | 0000:03:11.5 | 10ed       | 8086      | type-VF  | pci_0000_03_11_5 | label_8086_10ed | available | {}         | NULL          | NULL       |         0 | 0000:03:00.1 |
+| 2018-02-07 11:09:27 | 2018-02-07 11:32:48 | NULL                |       0 | 17 |               2 | 0000:03:11.7 | 10ed       | 8086      | type-VF  | pci_0000_03_11_7 | label_8086_10ed | available | {}         | NULL          | NULL       |         0 | 0000:03:00.1 |
+| 2018-02-07 11:09:27 | 2018-02-07 11:32:48 | NULL                |       0 | 18 |               2 | 0000:03:12.1 | 10ed       | 8086      | type-VF  | pci_0000_03_12_1 | label_8086_10ed | available | {}         | NULL          | NULL       |         0 | 0000:03:00.1 |
+| 2018-02-07 11:09:27 | 2018-02-07 11:32:48 | NULL                |       0 | 19 |               2 | 0000:03:12.3 | 10ed       | 8086      | type-VF  | pci_0000_03_12_3 | label_8086_10ed | available | {}         | NULL          | NULL       |         0 | 0000:03:00.1 |
++---------------------+---------------------+---------------------+---------+----+-----------------+--------------+------------+-----------+----------+------------------+-----------------+-----------+------------+---------------+------------+-----------+--------------+
+19 rows in set (0.00 sec)
+#+end_example
+
+Update debug configuration for controllers.
+
+[DEFAULT]
+debug=true
+allow_resize_to_same_host=false
+
+Restart nova api, schedulers.
+
+#+BEGIN_SRC sh :session shell_cfg
+salt ctl* cmd.run 'systemctl restart nova-api.service' --no-color
+salt ctl* cmd.run 'systemctl restart nova-scheduler.service' --no-color
+#+END_SRC
+
+Update sriov-agent config.
+
+/etc/neutron/plugins/ml2/sriov_agent.ini
+
+[securitygroup]
+firewall_driver = neutron.agent.firewall.NoopFirewallDriver
+
+#+BEGIN_SRC sh :session shell_cfg
+salt cmp* cmd.run 'systemctl restart neutron-sriov-agent' --no-color
+#+END_SRC
+
+Show networks.
+
+#+BEGIN_SRC sh :session shell_ctl01
+source /root/keystonercv3
+neutron net-list
+#+END_SRC
+
+#+begin_example
+
+neutron CLI is deprecated and will be removed in the future. Use openstack CLI instead.
+
++--------------------------------------+----------------------------------------------------+----------------------------------+-------------------------------------------------------+
+| id                                   | name                                               | tenant_id                        | subnets                                               |
++--------------------------------------+----------------------------------------------------+----------------------------------+-------------------------------------------------------+
+| 04b88bb4-2532-4cab-97ec-fc2e8eb506c3 | HA network tenant b7ee57632cc5476abaf162f1ad4d58f0 |                                  | f669f1f3-a7e0-4da1-a6a7-9479be358d66 169.254.192.0/18 |
+| 568bf722-4f23-488b-98fb-b6a360ee3ed0 | ext                                                | b7ee57632cc5476abaf162f1ad4d58f0 | 7e40cce3-8bfa-429e-a971-ab6e6c46ccc5 10.16.0.0/24     |
+| 8ff07982-9479-444b-ab10-64b3911585de | test                                               | b7ee57632cc5476abaf162f1ad4d58f0 | 130dd0fd-fc23-4a50-b096-0bef27f8dac6 192.168.1.0/24   |
++--------------------------------------+----------------------------------------------------+----------------------------------+-------------------------------------------------------+
+#+end_example
+
+Create test VM.
+
+#+BEGIN_SRC sh :session shell_ctl01
+source /root/keystonercv3
+openstack server create --flavor m1.extra_tiny --image cirros --nic net-name=test vm1
+#+END_SRC
+
+Create test sr-iov VM.
+
+#+BEGIN_SRC text
+#cloud-config
+
+# Add groups to the system
+# The following example adds the ubuntu group with members 'root' and 'sys'
+# and the empty group cloud-users.
+groups:
+  - ubuntu: [root,sys]
+  - cloud-users
+
+# Add users to the system. Users are added after groups are added.
+users:
+  - default
+  - name: amadev
+    gecos: amadev
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    primary-group: amadev
+    groups: users
+    ssh-import-id: amadev
+    lock_passwd: false
+    passwd: $6$FdYzZ8gI$U8Rkhz9f/Z58qT/2z2LNSMY/rfpJ7I2i8Jwn4Bqc7bdFdBqIs.e5WD7UUBxA5vt2ydCKQSJKILFH.I6iaFgrU.
+#+END_SRC
+
+#+BEGIN_SRC sh :session shell_ctl01
+net_id=`neutron net-show test | grep "\ id\ " | awk '{ print $4 }'`
+port_id=`neutron port-create $net_id --name sriov_port --binding:vnic_type direct | grep "\ id\ " | awk '{ print $4 }'`
+openstack server create --flavor m1.extra_tiny --image xenial --nic port-id=$port_id vm1-sriov --availability-zone nova:cmp001 --user-data user-data.txt
+#+END_SRC
+
+Get console:
+
+virt-viewer -c qemu+ssh://cmp2/system instance-00000016
+
+Test case scenarios:
+
+- Migrate from one to other and visa versa
+- Evacuate rom one to other and visa versa
+
+file:test_sriov_migration.py
+file:test_sriov_evacuation.py
+
+https://docs.openstack.org/neutron/pike/admin/config-sriov.html
