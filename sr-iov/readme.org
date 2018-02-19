@@ -451,7 +451,8 @@ Test case scenarios:
 - Migrate from one to other and visa versa
 - Evacuate rom one to other and visa versa
 
-file:test_sriov_migration.py
-file:test_sriov_evacuation.py
+[[test_sriov_migration.py]]
+
+[[test_sriov_evacuation.py]]
 
 https://docs.openstack.org/neutron/pike/admin/config-sriov.html
