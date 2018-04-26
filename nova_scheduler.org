@@ -12,7 +12,7 @@
 
 This doc contains 3 parts describing the following:
 
-- common Nova scheduler principes related to scheduler setup, scheduler logic of picking a host and
+- common Nova scheduler principles related to scheduler setup, scheduler logic of picking a host and
   params affecting the scheduling process;
 - information about Mirantis analyzer tool for Nova scheduling;
 - log of booting VMs on Mirantis test lab.
@@ -21,9 +21,9 @@ This doc contains 3 parts describing the following:
 
 *** Scheduler Setup
 
-Nova sheduling process is configurable. First of all you can choose what driver for scheduling is
+Nova scheduling process is configurable. First of all, you can choose what driver for scheduling is
 used in *CONF/scheduler/driver* [fn:1]. Several options are available e.g. filter_scheduler,
-caching_scheduler or chance_scheduler. The filter_scheduler is used by default and in this doc the
+caching_scheduler or chance_scheduler. As the filter_scheduler is used by default, in this doc the
 most attention is focused on it. Next important setting is *CONF/scheduler/host_manager* [fn:2]
 that represents the in-memory picture of the hosts and their properties that scheduler takes into
 account.
@@ -60,13 +60,13 @@ A good description could be found in filter scheduler Nova docs [fn:3].
 The filter scheduler has several phases:
 
 1. Get all available compute nodes. Depending on Nova release it either
-   could be a request into DB or the Placement service. In Ocata, Placement is in reporting mode
+   could be a request from DB or the Placement service. In Ocata, Placement is in reporting mode
    only it means data are sent to Placement but not used for scheduling. In Pike+ release Placement
    is a part of scheduling to get hosts and put allocations.
 2. Filter gotten hosts. The list of hosts go through each filter in the
    order specified in *CONF/filter_scheduler/enabled_filters*. For each host a filter returns either
    true or false.
-3. Weigh hosts and sort host accorging to weights in a descending order.
+3. Weigh hosts and sort host according to weights in a descending order.
    In Ocata, the following list of weighers is used:
 
    | DiskWeigher                        |
@@ -90,7 +90,7 @@ The filter scheduler has several phases:
    the lower host is on the sorted list.
 
 4. Cut the weighed host list according to the *CONF/filter_scheduler/host_subset_size*
-   default is 1.
+   the default is 1.
 
 5. Pick a random host from weighed host subset.
 
@@ -98,18 +98,18 @@ Let's see some simple cases.
 
 1. Equal hosts scheduling.
    We have several equal hosts, let's assume that filters pass all hosts, in that
-   case only weighers affect scheduling. On the first request host is picked
+   case only weighers affect scheduling. On the first request, a host is picked
    depending on the order in the DB, probably the order of creation.
-   On the next requests the most un-occupied hosts are picked.
+   On the next requests, the most un-occupied hosts are picked.
 
 2. Big+small hosts scheduling.
-   In that case, most powerfull hosts are used until their remaining resourses
-   will be less or equal to the other less powerfull hosts.
+   In that case, most powerful hosts are used until their remaining resources
+   will be less or equal to the other less powerful hosts.
 
 3. Lay aside scheduling for hosts with big disks.
    In that case, we need to set disk_weight_multiplier to a negative value.
    For example, we have hosts with 4Tb disks (big) and 512Gb disks (small).
-   Setting disk_weight_multiplier to -10 allows to schedule on host with small
+   Setting disk_weight_multiplier to -10 allows to schedule on a host with small
    disks first. This assumes that other host params besides the disk space
    are equal.
 
@@ -118,9 +118,9 @@ Let's see some simple cases.
 The ways affect scheduling is mostly coded in filters.
 The following params could affect scheduling:
 
-- availability_zone - a param for create server request [fn:4], restrict list of
-  host can be used to the particular availability_zone;
-- scheduler_hints - params for create server request
+- availability_zone - a param for create server request [fn:4], it restricts the list of
+  hosts can be used to the hosts with particular availability_zone;
+- scheduler_hints - params for the create server request
 
   | build_near_host_ip |
   | cidr               |
@@ -158,19 +158,19 @@ The following params could affect scheduling:
 
 ** Debug scheduling
 
-As there many factors affecting the scheduling process some times it
-needs to go deeper to understand what happening. The questions
+As there many factors affecting the scheduling process sometimes it
+needs to go deeper to understand what happens. The questions
 wanted to be answered could be:
 - How many hosts were gotten by the scheduler? What are they?
-- How many hosts were passed/rejected by the each filter? What are they?
+- How many hosts were passed/rejected by each filter? What are they?
 - What weight the host have? What value was gotten from the particular weigher?
-- What host were chosen and where VM is actually placed?
+- What host was chosen and where VM is actually placed?
 
-For that purpose Mirantis implemented a patch that logs all required data
-in json-format into a file specified by *CONF/filter_scheduler/scheduler_debug_file*.
+For that purpose, Mirantis implemented a patch that logs all required data
+in JSON-format into a file specified by *CONF/filter_scheduler/scheduler_debug_file*.
 
 After booting a VM, scheduler_debug_file could be uploaded into DB
-and analyzed with arbitrary sql-queries.
+and analyzed with arbitrary SQL-queries.
 
 ** Test on Mirantis lab
 
@@ -215,7 +215,7 @@ salt ctl* cmd.run 'crudini --set /etc/nova/nova.conf filter_scheduler host_subse
 salt ctl* cmd.run 'systemctl restart nova-scheduler' --no-color
 #+END_SRC
 
-*** Apply the patch for scheduler
+*** Apply the patch for the scheduler
 
 Patch scheduler to log inner state.
 
@@ -240,7 +240,7 @@ openstack server list -c ID -f value | xargs openstack server delete
 flavor=f1; img=8466bbdb-7bd3-4528-a3a3-a3b1c9ecbb32; for i in {1..20}; do nova boot --flavor $flavor --image $img vm-$i; sleep 10; done
 #+END_SRC
 
-*** Check VM distribution.
+*** Check VM distribution
 
 #+BEGIN_SRC sh :session shell-o20-ctl01 :results raw
 openstack server list -c Name -f value | wc -l
@@ -248,7 +248,6 @@ openstack server list --long -c Host -f value | sort | uniq -c
 #+END_SRC
 
 | 20 |
-
 
 | 1 cmp0  |
 | 1 cmp1  |
@@ -271,7 +270,7 @@ openstack server list --long -c Host -f value | sort | uniq -c
 | 1 cmp8  |
 | 1 cmp9  |
 
-The same should be in the Placement service;
+The same should be in the Placement service.
 
 #+BEGIN_SRC sh :session shell-o20-mysql
 select p.name, count(*) from allocations a join resource_providers p on a.resource_provider_id = p.id where resource_class_id = 0 group by 1;
