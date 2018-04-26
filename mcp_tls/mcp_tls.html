@@ -1,0 +1,623 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+<!-- 2017-07-25 Tue 15:17 -->
+<meta  http-equiv="Content-Type" content="text/html;charset=utf-8" />
+<meta  name="viewport" content="width=device-width, initial-scale=1" />
+<title>TLS for MCP</title>
+<meta  name="generator" content="Org-mode" />
+<meta  name="author" content="Andrey Volkov" />
+<style type="text/css">
+ <!--/*--><![CDATA[/*><!--*/
+  .title  { text-align: center;
+             margin-bottom: .2em; }
+  .subtitle { text-align: center;
+              font-size: medium;
+              font-weight: bold;
+              margin-top:0; }
+  .todo   { font-family: monospace; color: red; }
+  .done   { font-family: monospace; color: green; }
+  .priority { font-family: monospace; color: orange; }
+  .tag    { background-color: #eee; font-family: monospace;
+            padding: 2px; font-size: 80%; font-weight: normal; }
+  .timestamp { color: #bebebe; }
+  .timestamp-kwd { color: #5f9ea0; }
+  .org-right  { margin-left: auto; margin-right: 0px;  text-align: right; }
+  .org-left   { margin-left: 0px;  margin-right: auto; text-align: left; }
+  .org-center { margin-left: auto; margin-right: auto; text-align: center; }
+  .underline { text-decoration: underline; }
+  #postamble p, #preamble p { font-size: 90%; margin: .2em; }
+  p.verse { margin-left: 3%; }
+  pre {
+    border: 1px solid #ccc;
+    box-shadow: 3px 3px 3px #eee;
+    padding: 8pt;
+    font-family: monospace;
+    overflow: auto;
+    margin: 1.2em;
+  }
+  pre.src {
+    position: relative;
+    overflow: visible;
+    padding-top: 1.2em;
+  }
+  pre.src:before {
+    display: none;
+    position: absolute;
+    background-color: white;
+    top: -10px;
+    right: 10px;
+    padding: 3px;
+    border: 1px solid black;
+  }
+  pre.src:hover:before { display: inline;}
+  pre.src-sh:before    { content: 'sh'; }
+  pre.src-bash:before  { content: 'sh'; }
+  pre.src-emacs-lisp:before { content: 'Emacs Lisp'; }
+  pre.src-R:before     { content: 'R'; }
+  pre.src-perl:before  { content: 'Perl'; }
+  pre.src-java:before  { content: 'Java'; }
+  pre.src-sql:before   { content: 'SQL'; }
+
+  table { border-collapse:collapse; }
+  caption.t-above { caption-side: top; }
+  caption.t-bottom { caption-side: bottom; }
+  td, th { vertical-align:top;  }
+  th.org-right  { text-align: center;  }
+  th.org-left   { text-align: center;   }
+  th.org-center { text-align: center; }
+  td.org-right  { text-align: right;  }
+  td.org-left   { text-align: left;   }
+  td.org-center { text-align: center; }
+  dt { font-weight: bold; }
+  .footpara { display: inline; }
+  .footdef  { margin-bottom: 1em; }
+  .figure { padding: 1em; }
+  .figure p { text-align: center; }
+  .inlinetask {
+    padding: 10px;
+    border: 2px solid gray;
+    margin: 10px;
+    background: #ffffcc;
+  }
+  #org-div-home-and-up
+   { text-align: right; font-size: 70%; white-space: nowrap; }
+  textarea { overflow-x: auto; }
+  .linenr { font-size: smaller }
+  .code-highlighted { background-color: #ffff00; }
+  .org-info-js_info-navigation { border-style: none; }
+  #org-info-js_console-label
+    { font-size: 10px; font-weight: bold; white-space: nowrap; }
+  .org-info-js_search-highlight
+    { background-color: #ffff00; color: #000000; font-weight: bold; }
+  /*]]>*/-->
+</style>
+<script type="text/javascript">
+/*
+@licstart  The following is the entire license notice for the
+JavaScript code in this tag.
+
+Copyright (C) 2012-2013 Free Software Foundation, Inc.
+
+The JavaScript code in this tag is free software: you can
+redistribute it and/or modify it under the terms of the GNU
+General Public License (GNU GPL) as published by the Free Software
+Foundation, either version 3 of the License, or (at your option)
+any later version.  The code is distributed WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE.  See the GNU GPL for more details.
+
+As additional permission under GNU GPL version 3 section 7, you
+may distribute non-source (e.g., minimized or compacted) forms of
+that code without the copy of the GNU GPL normally required by
+section 4, provided you include this license notice and a URL
+through which recipients can access the Corresponding Source.
+
+
+@licend  The above is the entire license notice
+for the JavaScript code in this tag.
+*/
+<!--/*--><![CDATA[/*><!--*/
+ function CodeHighlightOn(elem, id)
+ {
+   var target = document.getElementById(id);
+   if(null != target) {
+     elem.cacheClassElem = elem.className;
+     elem.cacheClassTarget = target.className;
+     target.className = "code-highlighted";
+     elem.className   = "code-highlighted";
+   }
+ }
+ function CodeHighlightOff(elem, id)
+ {
+   var target = document.getElementById(id);
+   if(elem.cacheClassElem)
+     elem.className = elem.cacheClassElem;
+   if(elem.cacheClassTarget)
+     target.className = elem.cacheClassTarget;
+ }
+/*]]>*///-->
+</script>
+</head>
+<body>
+<div id="content">
+<h1 class="title">TLS for MCP</h1>
+<div id="table-of-contents">
+<h2>Table of Contents</h2>
+<div id="text-table-of-contents">
+<ul>
+<li><a href="#orgheadline10">1. TLS for MCP</a>
+<ul>
+<li><a href="#orgheadline8">1.1. Manual setup on all-in-one host</a>
+<ul>
+<li><a href="#orgheadline3">1.1.1. Self-signed certificate generation</a></li>
+<li><a href="#orgheadline4">1.1.2. HAproxy config update</a></li>
+<li><a href="#orgheadline5">1.1.3. Keystone endpoints update</a></li>
+<li><a href="#orgheadline6">1.1.4. Testing</a></li>
+<li><a href="#orgheadline7">1.1.5. Known issues</a></li>
+</ul>
+</li>
+<li><a href="#orgheadline9">1.2. Links</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-orgheadline10" class="outline-2">
+<h2 id="orgheadline10"><span class="section-number-2">1</span> TLS for MCP</h2>
+<div class="outline-text-2" id="text-1">
+<p>
+Plan is the following:
+</p>
+<ul class="org-ul">
+<li>Make manual haproxy with TLS setup on the all-in-one host</li>
+<li>Make changes in formulas to get TLS support available,
+that should be done in iterativa manner: small change in formulas
+and test with mcp-virtual-aio model. Final state should be quite the same
+as in the previous manual setup.</li>
+<li>Update mcp-virtual-lab model and test HA haproxy + https.</li>
+</ul>
+</div>
+
+<div id="outline-container-orgheadline8" class="outline-3">
+<h3 id="orgheadline8"><span class="section-number-3">1.1</span> Manual setup on all-in-one host</h3>
+<div class="outline-text-3" id="text-1-1">
+<p>
+Given: we have host named "mcp" deploed by mcp-virtual-aio model <sup><a id="fnr.1" class="footref" href="#fn.1">1</a></sup>,
+with ip address: 172.16.60.16,
+additional info about the deployment process can be found in <sup><a id="fnr.2" class="footref" href="#fn.2">2</a></sup>, <sup><a id="fnr.3" class="footref" href="#fn.3">3</a></sup>.
+</p>
+</div>
+
+<div id="outline-container-orgheadline3" class="outline-4">
+<h4 id="orgheadline3"><span class="section-number-4">1.1.1</span> Self-signed certificate generation</h4>
+<div class="outline-text-4" id="text-1-1-1">
+</div><ol class="org-ol"><li><a id="orgheadline1"></a>On mcp<br  /><div class="outline-text-5" id="text-1-1-1-1">
+<div class="org-src-container">
+
+<pre class="src src-text">sudo mkdir /etc/ssl/aio
+sudo openssl genrsa -out /etc/ssl/aio/aio.key 1024
+sudo openssl req -new -key /etc/ssl/aio/aio.key \
+                 -out /etc/ssl/aio/aio.csr
+&gt; Country Name (2 letter code) [AU]:
+&gt; State or Province Name (full name) [Some-State]:
+&gt; Locality Name (eg, city) []:
+&gt; Organization Name (eg, company) [Internet Widgits Pty Ltd]:
+&gt; Organizational Unit Name (eg, section) []:
+&gt; Common Name (e.g. server FQDN or YOUR name) []: 172.16.60.16
+&gt; Email Address []:
+
+&gt; Please enter the following 'extra' attributes to be sent with your certificate request
+&gt; A challenge password []:
+&gt; An optional company name []:
+sudo openssl x509 -req -days 365 -in /etc/ssl/aio/aio.csr \
+                  -signkey /etc/ssl/aio/aio.key \
+                  -out /etc/ssl/aio/aio.crt
+
+sudo cat /etc/ssl/aio/aio.crt /etc/ssl/aio/aio.key \
+         | sudo tee /etc/ssl/aio/aio.pem
+</pre>
+</div>
+
+<p>
+To make the ca cert available for the python request library
+/etc/ssl/certs/ca-certificates.crt should be updated.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-sh">mv /etc/ssl/aio/aio.crt /tmp/aio.crt
+cat /etc/ssl/certs/ca-certificates.crt /tmp/aio.crt &gt; /tmp/ca-certificates.crt
+sudo mv /tmp/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+</pre>
+</div>
+</div></li>
+
+<li><a id="orgheadline2"></a>On client<br  /><div class="outline-text-5" id="text-1-1-1-2">
+<p>
+As certificate is self-signed we need to copy ca cert file to the client.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-sh">scp mcp:/etc/ssl/aio/aio.crt /tmp/aio.crt
+cat /etc/ssl/certs/ca-certificates.crt /tmp/aio.crt &gt; /tmp/ca-certificates.crt
+sudo mv /tmp/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+</pre>
+</div>
+</div></li></ol>
+</div>
+
+<div id="outline-container-orgheadline4" class="outline-4">
+<h4 id="orgheadline4"><span class="section-number-4">1.1.2</span> HAproxy config update</h4>
+<div class="outline-text-4" id="text-1-1-2">
+<p>
+haproxy is set up in the TLS offloading mode <sup><a id="fnr.4" class="footref" href="#fn.4">4</a></sup>.
+On external ip it provides ports in tls mode and proxies it to the
+services listening localhost ports. There should not be ports with
+unencrypted traffic available or they must redirect to TLS ports at
+least.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-sh">sudo apt install haproxy
+</pre>
+</div>
+
+<div class="org-src-container">
+
+<pre class="src src-sh">cat /etc/haproxy/haproxy.cfg
+</pre>
+</div>
+
+<pre class="example">
+global
+	log /dev/log	local0
+	log /dev/log	local1 notice
+	chroot /var/lib/haproxy
+        stats socket /run/haproxy/admin.sock mode 660 level admin
+        #stats socket 172.16.60.16:9000
+	stats timeout 30s
+	user haproxy
+	group haproxy
+	daemon
+
+	# Default SSL material locations
+	ca-base /etc/ssl/certs
+	crt-base /etc/ssl/private
+
+	# Default ciphers to use on SSL-enabled listening sockets.
+	# For more information, see ciphers(1SSL). This list is from:
+	#  https://hynek.me/articles/hardening-your-web-servers-ssl-ciphers/
+	ssl-default-bind-ciphers ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:ECDH+3DES:DH+3DES:RSA+AESGCM:RSA+AES:RSA+3DES:!aNULL:!MD5:!DSS
+        ssl-default-bind-options no-sslv3
+        # number of simultanious connections
+        maxconn 2048
+        # size of parameters to generate Diffie-Hellman Exchange key
+        tune.ssl.default-dh-param 2048
+
+defaults
+	log	global
+	mode	http
+	option	httplog
+	option	dontlognull
+        timeout connect 5000
+        timeout client  50000
+        timeout server  50000
+	errorfile 400 /etc/haproxy/errors/400.http
+	errorfile 403 /etc/haproxy/errors/403.http
+	errorfile 408 /etc/haproxy/errors/408.http
+	errorfile 500 /etc/haproxy/errors/500.http
+	errorfile 502 /etc/haproxy/errors/502.http
+	errorfile 503 /etc/haproxy/errors/503.http
+	errorfile 504 /etc/haproxy/errors/504.http
+        # set X-Forwarded-For header
+        option forwardfor
+        # close connection with server
+        option http-server-close
+
+listen stats
+        bind  172.16.60.16:1936
+        stats enable
+        stats hide-version
+        stats scope .
+        stats realm Haproxy\ Statistics
+        stats uri /
+        stats auth stats:stats
+
+
+frontend auth_admin_cluster_frontend_https
+        bind 172.16.60.16:35357 ssl crt /etc/ssl/aio/aio.pem
+        http-request set-header X-Forwarded-Proto https
+        default_backend auth_admin_cluster_backend
+
+backend auth_admin_cluster_backend
+        server controller1 127.0.0.1:35357 check
+
+
+frontend image_admin_cluster_frontend_https
+        bind 172.16.60.16:9292 ssl crt /etc/ssl/aio/aio.pem
+        http-request set-header X-Forwarded-Proto https
+        default_backend image_admin_cluster_backend
+
+backend image_admin_cluster_backend
+        server controller1 127.0.0.1:9292 check
+
+
+frontend volume_admin_cluster_frontend_https
+        bind 172.16.60.16:8776 ssl crt /etc/ssl/aio/aio.pem
+        http-request set-header X-Forwarded-Proto https
+        default_backend volume_admin_cluster_backend
+
+backend volume_admin_cluster_backend
+        server controller1 127.0.0.1:8776 check
+
+
+frontend ec2_admin_cluster_frontend_https
+        bind 172.16.60.16:8773 ssl crt /etc/ssl/aio/aio.pem
+        http-request set-header X-Forwarded-Proto https
+        default_backend ec2_admin_cluster_backend
+
+backend ec2_admin_cluster_backend
+        server controller1 127.0.0.1:8773 check
+
+
+frontend placement_admin_cluster_frontend_https
+        bind 172.16.60.16:8778 ssl crt /etc/ssl/aio/aio.pem
+        http-request set-header X-Forwarded-Proto https
+        default_backend placement_admin_cluster_backend
+
+backend placement_admin_cluster_backend
+        server controller1 127.0.0.1:8778 check
+
+
+frontend identity_admin_cluster_frontend_https
+        bind 172.16.60.16:5000 ssl crt /etc/ssl/aio/aio.pem
+        http-request set-header X-Forwarded-Proto https
+        default_backend identity_admin_cluster_backend
+
+backend identity_admin_cluster_backend
+        server controller1 127.0.0.1:5000 check
+
+
+frontend compute_admin_cluster_frontend_https
+        bind 172.16.60.16:8774 ssl crt /etc/ssl/aio/aio.pem
+        http-request set-header X-Forwarded-Proto https
+        default_backend compute_admin_cluster_backend
+
+backend compute_admin_cluster_backend
+        server controller1 127.0.0.1:8774 check
+
+
+frontend network_admin_cluster_frontend_https
+        bind 172.16.60.16:9696 ssl crt /etc/ssl/aio/aio.pem
+        http-request set-header X-Forwarded-Proto https
+        default_backend network_admin_cluster_backend
+
+backend network_admin_cluster_backend
+        server controller1 127.0.0.1:9696 check
+
+
+frontend volumev2_admin_cluster_frontend_https
+        bind 172.16.60.16:8776 ssl crt /etc/ssl/aio/aio.pem
+        http-request set-header X-Forwarded-Proto https
+        default_backend volumev2_admin_cluster_backend
+
+backend volumev2_admin_cluster_backend
+        server controller1 127.0.0.1:8776 check
+
+
+frontend compute_legacy_admin_cluster_frontend_https
+        bind 172.16.60.16:8774 ssl crt /etc/ssl/aio/aio.pem
+        http-request set-header X-Forwarded-Proto https
+        default_backend compute_legacy_admin_cluster_backend
+
+backend compute_legacy_admin_cluster_backend
+        server controller1 127.0.0.1:8774 check
+
+
+frontend orchestration_admin_cluster_frontend_https
+        bind 172.16.60.16:8004 ssl crt /etc/ssl/aio/aio.pem
+        http-request set-header X-Forwarded-Proto https
+        default_backend orchestration_admin_cluster_backend
+
+backend orchestration_admin_cluster_backend
+        server controller1 127.0.0.1:8004 check
+</pre>
+</div>
+</div>
+
+<div id="outline-container-orgheadline5" class="outline-4">
+<h4 id="orgheadline5"><span class="section-number-4">1.1.3</span> Keystone endpoints update</h4>
+<div class="outline-text-4" id="text-1-1-3">
+<p>
+This doc desribes the hacky way, in reality it should be done with
+openstack enpoint commands.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-sql">UPDATE endpoint e
+SET e.url = replace(e.url, 'http://127.0.0.1', 'https://172.16.60.16')
+WHERE e.interface in ('public', 'internal');
+
+Rows matched: 22  Changed: 22  Warnings: 0
+
+SELECT s.type,
+       e.interface,
+       e.url
+FROM endpoint e
+JOIN service s ON e.service_id = s.id
+WHERE e.interface in ('public', 'internal');
+
+SELECT s.type,
+       e.interface,
+       e.url
+FROM endpoint e
+JOIN service s ON e.service_id = s.id
+WHERE e.interface in ('public', 'internal');
+
++----------------+-----------+-----------------------------------------------+
+| type           | interface | url                                           |
++----------------+-----------+-----------------------------------------------+
+| ec2            | public    | https://172.16.60.16:8773/services/Cloud      |
+| ec2            | internal  | https://172.16.60.16:8773/services/Cloud      |
+| orchestration  | public    | https://172.16.60.16:8004/v1/%(project_id)s   |
+| orchestration  | internal  | https://172.16.60.16:8004/v1/%(project_id)s   |
+| volumev2       | internal  | https://172.16.60.16:8776/v2/$(project_id)s   |
+| volumev2       | public    | https://172.16.60.16:8776/v2/$(project_id)s   |
+| image          | internal  | https://172.16.60.16:9292                     |
+| image          | public    | https://172.16.60.16:9292                     |
+| volume         | internal  | https://172.16.60.16:8776/v1/$(project_id)s   |
+| volume         | public    | https://172.16.60.16:8776/v1/$(project_id)s   |
+| cloudformation | public    | https://172.16.60.16:8000/v1                  |
+| cloudformation | internal  | https://172.16.60.16:8000/v1                  |
+| compute        | internal  | https://172.16.60.16:8774/v2.1/$(project_id)s |
+| compute        | public    | https://172.16.60.16:8774/v2.1/$(project_id)s |
+| placement      | public    | https://172.16.60.16:8778                     |
+| placement      | internal  | https://172.16.60.16:8778                     |
+| network        | public    | https://172.16.60.16:9696/                    |
+| network        | internal  | https://172.16.60.16:9696/                    |
+| compute_legacy | public    | https://172.16.60.16:8774/v2/$(project_id)s   |
+| compute_legacy | internal  | https://172.16.60.16:8774/v2/$(project_id)s   |
+| identity       | public    | https://172.16.60.16:5000/v2.0                |
+| identity       | internal  | https://172.16.60.16:5000/v2.0                |
++----------------+-----------+-----------------------------------------------+
+22 rows in set (0.00 sec)
+</pre>
+</div>
+
+<p>
+To make changes available memcache should be flushed:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-sh">echo 'flush_all' | nc localhost 11211
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgheadline6" class="outline-4">
+<h4 id="orgheadline6"><span class="section-number-4">1.1.4</span> Testing</h4>
+<div class="outline-text-4" id="text-1-1-4">
+<p>
+Environment variables from /root/keystonercv3.
+OS_AUTH_URL must be updated appropriately.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-sh">cat /root/keystonercv3
+</pre>
+</div>
+
+<pre class="example">
+export OS_IDENTITY_API_VERSION=3
+export OS_AUTH_URL=https://172.16.60.16:35357/v3
+export OS_PROJECT_DOMAIN_NAME=default
+export OS_USER_DOMAIN_NAME=default
+export OS_PROJECT_NAME=admin
+export OS_TENANT_NAME=admin
+export OS_USERNAME=admin
+export OS_PASSWORD=workshop
+export OS_REGION_NAME=RegionOne
+export OS_INTERFACE=public
+export OS_CACERT="/etc/ssl/certs/ca-certificates.crt"
+</pre>
+
+<p>
+After that some openstack calls should be made to test the env.
+On server side it's need to check no requests to localhost without
+X-Forwarded-Proto: https
+X-Forwarded-For: 172.16.17.27
+are made.
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-sh">sudo tcpdump -i lo -A -s10000 '(dst port 9292
+  or dst port 8000
+  or dst port 8776
+  or dst port 8773
+  or dst port 8778
+  or dst port 5000
+  or dst port 8774
+  or dst port 9696
+  or dst port 8776
+  or dst port 8774
+  or dst port 8004)
+ and (((ip[2:2] - ((ip[0]&amp;0xf)&lt;&lt;2)) - ((tcp[12]&amp;0xf0)&gt;&gt;2)) != 0)'
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgheadline7" class="outline-4">
+<h4 id="orgheadline7"><span class="section-number-4">1.1.5</span> Known issues</h4>
+<div class="outline-text-4" id="text-1-1-5">
+<p>
+Nova compute requests neutron server not honoring catalog info,
+therefore requests are still plain:
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-text">11:57:17.874161 IP localhost.33594 &gt; localhost.9696: Flags [P.], seq 19186:19632, ack 37242, win 3637, options [nop,nop,TS val 1295704297 ecr 1295704296], length 446
+E....~@.@.h..........:%...n........5.......
+M:..M:..GET /v2.0/ports.json?network_id=11c0be9a-8e2d-497f-8e8c-b134e0103483&amp;device_owner=network%3Adhcp HTTP/1.1
+Host: 127.0.0.1:9696
+Connection: keep-alive
+Accept-Encoding: gzip, deflate
+Accept: application/json
+User-Agent: python-neutronclient
+X-Auth-Token: gAAAAABZdyeeOCl_fA8EJGXHDZpem3VL6xPrKowcV4pLvUMYAt7k8SeFGEhBnFduDudMAwXxetnKFnNe-4lra1Vlmj78NvRUieHSGmqq4JY4BVfRgMDYS6HbvEoGb1IH9kk0yD1khr-Cd9xv1VvBu5gkSfO_tt6P9rDAdRjQfWzZrMDlCdaMwns
+</pre>
+</div>
+</div>
+</div>
+</div>
+
+
+<div id="outline-container-orgheadline9" class="outline-3">
+<h3 id="orgheadline9"><span class="section-number-3">1.2</span> Links</h3>
+<div class="outline-text-3" id="text-1-2">
+</div>
+</div>
+</div>
+<div id="footnotes">
+<h2 class="footnotes">Footnotes: </h2>
+<div id="text-footnotes">
+
+<div class="footdef"><sup><a id="fn.1" class="footnum" href="#fnr.1">1</a></sup> <div class="footpara"><p class="footpara">
+<a href="https://gerrit.mcp.mirantis.net/#/admin/projects/salt-models/mcp-virtual-aio">https://gerrit.mcp.mirantis.net/#/admin/projects/salt-models/mcp-virtual-aio</a>
+</p></div></div>
+
+<div class="footdef"><sup><a id="fn.2" class="footnum" href="#fnr.2">2</a></sup> <div class="footpara"><p class="footpara">
+<a href="https://docs.google.com/document/d/18y1SVDYiULpTS4B5PeJ3rl82GseOFrWtAc-aqVCa4Wo/edit#heading=h.vtsb4am9aysb">https://docs.google.com/document/d/18y1SVDYiULpTS4B5PeJ3rl82GseOFrWtAc-aqVCa4Wo/edit#heading=h.vtsb4am9aysb</a>
+</p></div></div>
+
+<div class="footdef"><sup><a id="fn.3" class="footnum" href="#fnr.3">3</a></sup> <div class="footpara"><p class="footpara">
+<a href="https://github.com/Alrem/aio">https://github.com/Alrem/aio</a>
+</p></div></div>
+
+<div class="footdef"><sup><a id="fn.4" class="footnum" href="#fnr.4">4</a></sup> <div class="footpara"><p class="footpara">
+<a href="https://www.haproxy.com/doc/aloha/7.0/deployment_guides/tls_layouts.html#ssl-tls-offloading">https://www.haproxy.com/doc/aloha/7.0/deployment_guides/tls_layouts.html#ssl-tls-offloading</a>
+</p></div></div>
+
+
+</div>
+</div></div>
+<div id="postamble" class="status">
+<p class="date">Date: 2017-07-25</p>
+<p class="author">Author: Andrey Volkov</p>
+<p class="date">Created: 2017-07-25 Tue 15:17</p>
+<p class="validation"><a href="http://validator.w3.org/check?uri=referer">Validate</a></p>
+</div>
+</body>
+</html>
