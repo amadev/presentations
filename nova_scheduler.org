@@ -4,14 +4,16 @@
 #+EMAIL: avolkov@mirantis.com
 #+OPTIONS: ^:nil
 #+OPTIONS: f:t
+#+OPTIONS: \n:t
 
 * Nova Scheduler
 
 ** Intro
 
 This doc contains 3 parts describing the following:
-- common Nova scheduler principes related to scheduler setup, scheduler logic of picking a host
-  and params affecting the scheduling process;
+
+- common Nova scheduler principes related to scheduler setup, scheduler logic of picking a host and
+  params affecting the scheduling process;
 - information about Mirantis analyzer tool for Nova scheduling;
 - log of booting VMs on Mirantis test lab.
 
@@ -19,27 +21,21 @@ This doc contains 3 parts describing the following:
 
 *** Scheduler Setup
 
-Nova sheduling process is configurable. First of all you can choose
-what driver for scheduling is used in
-*CONF/scheduler/driver* [fn:1]. Several options are available
-e.g. filter_scheduler, caching_scheduler or chance_scheduler. The
-filter_scheduler is used by default and in this doc the most attention
-is focused on it.  Next important setting is
-*CONF/scheduler/host_manager* [fn:2] that represents the in-memory
-picture of the hosts and their properties that scheduler takes into
+Nova sheduling process is configurable. First of all you can choose what driver for scheduling is
+used in *CONF/scheduler/driver* [fn:1]. Several options are available e.g. filter_scheduler,
+caching_scheduler or chance_scheduler. The filter_scheduler is used by default and in this doc the
+most attention is focused on it. Next important setting is *CONF/scheduler/host_manager* [fn:2]
+that represents the in-memory picture of the hosts and their properties that scheduler takes into
 account.
 
-For the filter_scheduler important settings are
-*CONF/filter_scheduler/available_filters* which are links to python
-objects loaded into memory and could be used in
-*CONF/filter_scheduler/enabled_filters* that are *really* used for
-filtering.
+For the filter_scheduler important settings are *CONF/filter_scheduler/available_filters* which are
+links to python objects loaded into memory and could be used in
+*CONF/filter_scheduler/enabled_filters* that are *really* used for filtering.
 
-*CONF/filter_scheduler/weight_classes* is a list of python objects
-using for weighing hosts.
+*CONF/filter_scheduler/weight_classes* is a list of python objects using for weighing hosts.
 
-In MCP the filter_scheduler is used with Nova default host manager.
-The following filters are enabled:
+In MCP the filter_scheduler is used with Nova default host manager. The following filters are
+enabled:
 
 | DifferentHostFilter               |
 | SameHostFilter                    |
@@ -64,39 +60,34 @@ A good description could be found in filter scheduler Nova docs [fn:3].
 The filter scheduler has several phases:
 
 1. Get all available compute nodes. Depending on Nova release it either
-could be a request into DB or the Placement service. In Ocata, Placement
-is in reporting mode only it means data are sent to Placement
-but not used for scheduling. In Pike+ release Placement is a part of
-scheduling to get hosts and put allocations.
-
+   could be a request into DB or the Placement service. In Ocata, Placement is in reporting mode
+   only it means data are sent to Placement but not used for scheduling. In Pike+ release Placement
+   is a part of scheduling to get hosts and put allocations.
 2. Filter gotten hosts. The list of hosts go through each filter in the
-order specified in *CONF/filter_scheduler/enabled_filters*. For each
-host a filter returns either true or false.
-
+   order specified in *CONF/filter_scheduler/enabled_filters*. For each host a filter returns either
+   true or false.
 3. Weigh hosts and sort host accorging to weights in a descending order.
-In Ocata, the following list of weighers is used:
+   In Ocata, the following list of weighers is used:
 
-| DiskWeigher |
-| IoOpsWeigher |
-| MetricsWeigher |
-| RAMWeigher |
-| ServerGroupSoftAffinityWeigher |
-| ServerGroupSoftAntiAffinityWeigher |
+   | DiskWeigher                        |
+   | IoOpsWeigher                       |
+   | MetricsWeigher                     |
+   | RAMWeigher                         |
+   | ServerGroupSoftAffinityWeigher     |
+   | ServerGroupSoftAntiAffinityWeigher |
 
-Each weigher calculates weight for a list of host. After that
-those calculated normalized basing on min and max values.
-Final weight for host is calculated as sum of weights * weight_multiplier.
-weight_multiplier is specified in CONF.
-Default multipliers are the following:
+   Each weigher calculates weight for a list of host. After that those calculated normalized basing on
+   min and max values. Final weight for host is calculated as sum of weights * weight_multiplier.
+   weight_multiplier is specified in CONF. Default multipliers are the following:
 
-| ram_weight_multiplier                |  1.0 |
-| disk_weight_multiplier               |  1.0 |
-| io_ops_weight_multiplier             | -1.0 |
-| soft_affinity_weight_multiplier      |  1.0 |
-| soft_anti_affinity_weight_multiplier |  1.0 |
+   | ram_weight_multiplier                |  1.0 |
+   | disk_weight_multiplier               |  1.0 |
+   | io_ops_weight_multiplier             | -1.0 |
+   | soft_affinity_weight_multiplier      |  1.0 |
+   | soft_anti_affinity_weight_multiplier |  1.0 |
 
-A negative value means the logic is reversed, e.g. the more io_ops on a host
-the lower host is on the sorted list.
+   A negative value means the logic is reversed, e.g. the more io_ops on a host
+   the lower host is on the sorted list.
 
 4. Cut the weighed host list according to the *CONF/filter_scheduler/host_subset_size*
    default is 1.
@@ -130,6 +121,7 @@ The following params could affect scheduling:
 - availability_zone - a param for create server request [fn:4], restrict list of
   host can be used to the particular availability_zone;
 - scheduler_hints - params for create server request
+
   | build_near_host_ip |
   | cidr               |
   | different_cell     |
@@ -140,6 +132,7 @@ The following params could affect scheduling:
   | target_cell        |
 
 - flavor extra_specs
+
   | pci_passthrough:alias          |
   | hw:cpu_policy                  |
   | hw:cpu_thread_policy           |
@@ -157,6 +150,7 @@ The following params could affect scheduling:
 - Placement allocation candidate request options.
   Since Pike+ it is possible to specify params for the Placement request with
   flavor extra specs:
+
   | resources:$RESOURCE_CLASS: $AMOUNT   |
   | resources$N:$RESOURCE_CLASS: $AMOUNT |
   | trait:$TRAIT_NAME: required          |
@@ -254,6 +248,7 @@ openstack server list --long -c Host -f value | sort | uniq -c
 #+END_SRC
 
 | 20 |
+
 
 | 1 cmp0  |
 | 1 cmp1  |
