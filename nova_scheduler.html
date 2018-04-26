@@ -1,0 +1,1675 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+<!-- 2018-04-26 Thu 17:08 -->
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Nova Scheduler</title>
+<meta name="generator" content="Org mode" />
+<meta name="author" content="Andrey Volkov" />
+<style type="text/css">
+ <!--/*--><![CDATA[/*><!--*/
+  .title  { text-align: center;
+             margin-bottom: .2em; }
+  .subtitle { text-align: center;
+              font-size: medium;
+              font-weight: bold;
+              margin-top:0; }
+  .todo   { font-family: monospace; color: red; }
+  .done   { font-family: monospace; color: green; }
+  .priority { font-family: monospace; color: orange; }
+  .tag    { background-color: #eee; font-family: monospace;
+            padding: 2px; font-size: 80%; font-weight: normal; }
+  .timestamp { color: #bebebe; }
+  .timestamp-kwd { color: #5f9ea0; }
+  .org-right  { margin-left: auto; margin-right: 0px;  text-align: right; }
+  .org-left   { margin-left: 0px;  margin-right: auto; text-align: left; }
+  .org-center { margin-left: auto; margin-right: auto; text-align: center; }
+  .underline { text-decoration: underline; }
+  #postamble p, #preamble p { font-size: 90%; margin: .2em; }
+  p.verse { margin-left: 3%; }
+  pre {
+    border: 1px solid #ccc;
+    box-shadow: 3px 3px 3px #eee;
+    padding: 8pt;
+    font-family: monospace;
+    overflow: auto;
+    margin: 1.2em;
+  }
+  pre.src {
+    position: relative;
+    overflow: visible;
+    padding-top: 1.2em;
+  }
+  pre.src:before {
+    display: none;
+    position: absolute;
+    background-color: white;
+    top: -10px;
+    right: 10px;
+    padding: 3px;
+    border: 1px solid black;
+  }
+  pre.src:hover:before { display: inline;}
+  /* Languages per Org manual */
+  pre.src-asymptote:before { content: 'Asymptote'; }
+  pre.src-awk:before { content: 'Awk'; }
+  pre.src-C:before { content: 'C'; }
+  /* pre.src-C++ doesn't work in CSS */
+  pre.src-clojure:before { content: 'Clojure'; }
+  pre.src-css:before { content: 'CSS'; }
+  pre.src-D:before { content: 'D'; }
+  pre.src-ditaa:before { content: 'ditaa'; }
+  pre.src-dot:before { content: 'Graphviz'; }
+  pre.src-calc:before { content: 'Emacs Calc'; }
+  pre.src-emacs-lisp:before { content: 'Emacs Lisp'; }
+  pre.src-fortran:before { content: 'Fortran'; }
+  pre.src-gnuplot:before { content: 'gnuplot'; }
+  pre.src-haskell:before { content: 'Haskell'; }
+  pre.src-hledger:before { content: 'hledger'; }
+  pre.src-java:before { content: 'Java'; }
+  pre.src-js:before { content: 'Javascript'; }
+  pre.src-latex:before { content: 'LaTeX'; }
+  pre.src-ledger:before { content: 'Ledger'; }
+  pre.src-lisp:before { content: 'Lisp'; }
+  pre.src-lilypond:before { content: 'Lilypond'; }
+  pre.src-lua:before { content: 'Lua'; }
+  pre.src-matlab:before { content: 'MATLAB'; }
+  pre.src-mscgen:before { content: 'Mscgen'; }
+  pre.src-ocaml:before { content: 'Objective Caml'; }
+  pre.src-octave:before { content: 'Octave'; }
+  pre.src-org:before { content: 'Org mode'; }
+  pre.src-oz:before { content: 'OZ'; }
+  pre.src-plantuml:before { content: 'Plantuml'; }
+  pre.src-processing:before { content: 'Processing.js'; }
+  pre.src-python:before { content: 'Python'; }
+  pre.src-R:before { content: 'R'; }
+  pre.src-ruby:before { content: 'Ruby'; }
+  pre.src-sass:before { content: 'Sass'; }
+  pre.src-scheme:before { content: 'Scheme'; }
+  pre.src-screen:before { content: 'Gnu Screen'; }
+  pre.src-sed:before { content: 'Sed'; }
+  pre.src-sh:before { content: 'shell'; }
+  pre.src-sql:before { content: 'SQL'; }
+  pre.src-sqlite:before { content: 'SQLite'; }
+  /* additional languages in org.el's org-babel-load-languages alist */
+  pre.src-forth:before { content: 'Forth'; }
+  pre.src-io:before { content: 'IO'; }
+  pre.src-J:before { content: 'J'; }
+  pre.src-makefile:before { content: 'Makefile'; }
+  pre.src-maxima:before { content: 'Maxima'; }
+  pre.src-perl:before { content: 'Perl'; }
+  pre.src-picolisp:before { content: 'Pico Lisp'; }
+  pre.src-scala:before { content: 'Scala'; }
+  pre.src-shell:before { content: 'Shell Script'; }
+  pre.src-ebnf2ps:before { content: 'ebfn2ps'; }
+  /* additional language identifiers per "defun org-babel-execute"
+       in ob-*.el */
+  pre.src-cpp:before  { content: 'C++'; }
+  pre.src-abc:before  { content: 'ABC'; }
+  pre.src-coq:before  { content: 'Coq'; }
+  pre.src-groovy:before  { content: 'Groovy'; }
+  /* additional language identifiers from org-babel-shell-names in
+     ob-shell.el: ob-shell is the only babel language using a lambda to put
+     the execution function name together. */
+  pre.src-bash:before  { content: 'bash'; }
+  pre.src-csh:before  { content: 'csh'; }
+  pre.src-ash:before  { content: 'ash'; }
+  pre.src-dash:before  { content: 'dash'; }
+  pre.src-ksh:before  { content: 'ksh'; }
+  pre.src-mksh:before  { content: 'mksh'; }
+  pre.src-posh:before  { content: 'posh'; }
+  /* Additional Emacs modes also supported by the LaTeX listings package */
+  pre.src-ada:before { content: 'Ada'; }
+  pre.src-asm:before { content: 'Assembler'; }
+  pre.src-caml:before { content: 'Caml'; }
+  pre.src-delphi:before { content: 'Delphi'; }
+  pre.src-html:before { content: 'HTML'; }
+  pre.src-idl:before { content: 'IDL'; }
+  pre.src-mercury:before { content: 'Mercury'; }
+  pre.src-metapost:before { content: 'MetaPost'; }
+  pre.src-modula-2:before { content: 'Modula-2'; }
+  pre.src-pascal:before { content: 'Pascal'; }
+  pre.src-ps:before { content: 'PostScript'; }
+  pre.src-prolog:before { content: 'Prolog'; }
+  pre.src-simula:before { content: 'Simula'; }
+  pre.src-tcl:before { content: 'tcl'; }
+  pre.src-tex:before { content: 'TeX'; }
+  pre.src-plain-tex:before { content: 'Plain TeX'; }
+  pre.src-verilog:before { content: 'Verilog'; }
+  pre.src-vhdl:before { content: 'VHDL'; }
+  pre.src-xml:before { content: 'XML'; }
+  pre.src-nxml:before { content: 'XML'; }
+  /* add a generic configuration mode; LaTeX export needs an additional
+     (add-to-list 'org-latex-listings-langs '(conf " ")) in .emacs */
+  pre.src-conf:before { content: 'Configuration File'; }
+
+  table { border-collapse:collapse; }
+  caption.t-above { caption-side: top; }
+  caption.t-bottom { caption-side: bottom; }
+  td, th { vertical-align:top;  }
+  th.org-right  { text-align: center;  }
+  th.org-left   { text-align: center;   }
+  th.org-center { text-align: center; }
+  td.org-right  { text-align: right;  }
+  td.org-left   { text-align: left;   }
+  td.org-center { text-align: center; }
+  dt { font-weight: bold; }
+  .footpara { display: inline; }
+  .footdef  { margin-bottom: 1em; }
+  .figure { padding: 1em; }
+  .figure p { text-align: center; }
+  .inlinetask {
+    padding: 10px;
+    border: 2px solid gray;
+    margin: 10px;
+    background: #ffffcc;
+  }
+  #org-div-home-and-up
+   { text-align: right; font-size: 70%; white-space: nowrap; }
+  textarea { overflow-x: auto; }
+  .linenr { font-size: smaller }
+  .code-highlighted { background-color: #ffff00; }
+  .org-info-js_info-navigation { border-style: none; }
+  #org-info-js_console-label
+    { font-size: 10px; font-weight: bold; white-space: nowrap; }
+  .org-info-js_search-highlight
+    { background-color: #ffff00; color: #000000; font-weight: bold; }
+  .org-svg { width: 90%; }
+  /*]]>*/-->
+</style>
+<script type="text/javascript">
+/*
+@licstart  The following is the entire license notice for the
+JavaScript code in this tag.
+
+Copyright (C) 2012-2018 Free Software Foundation, Inc.
+
+The JavaScript code in this tag is free software: you can
+redistribute it and/or modify it under the terms of the GNU
+General Public License (GNU GPL) as published by the Free Software
+Foundation, either version 3 of the License, or (at your option)
+any later version.  The code is distributed WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE.  See the GNU GPL for more details.
+
+As additional permission under GNU GPL version 3 section 7, you
+may distribute non-source (e.g., minimized or compacted) forms of
+that code without the copy of the GNU GPL normally required by
+section 4, provided you include this license notice and a URL
+through which recipients can access the Corresponding Source.
+
+
+@licend  The above is the entire license notice
+for the JavaScript code in this tag.
+*/
+<!--/*--><![CDATA[/*><!--*/
+ function CodeHighlightOn(elem, id)
+ {
+   var target = document.getElementById(id);
+   if(null != target) {
+     elem.cacheClassElem = elem.className;
+     elem.cacheClassTarget = target.className;
+     target.className = "code-highlighted";
+     elem.className   = "code-highlighted";
+   }
+ }
+ function CodeHighlightOff(elem, id)
+ {
+   var target = document.getElementById(id);
+   if(elem.cacheClassElem)
+     elem.className = elem.cacheClassElem;
+   if(elem.cacheClassTarget)
+     target.className = elem.cacheClassTarget;
+ }
+/*]]>*///-->
+</script>
+</head>
+<body>
+<div id="content">
+<h1 class="title">Nova Scheduler</h1>
+<div id="table-of-contents">
+<h2>Table of Contents</h2>
+<div id="text-table-of-contents">
+<ul>
+<li><a href="#org70d1e55">1. Nova Scheduler</a>
+<ul>
+<li><a href="#orgb326f58">1.1. Intro</a></li>
+<li><a href="#orgfd6f9bc">1.2. Nova Scheduler</a>
+<ul>
+<li><a href="#org811b1c7">1.2.1. Scheduler Setup</a></li>
+<li><a href="#org4be7cea">1.2.2. Scheduler logic</a></li>
+<li><a href="#org6ec5324">1.2.3. Params affecting scheduling</a></li>
+</ul>
+</li>
+<li><a href="#orgb38547b">1.3. Debug scheduling</a></li>
+<li><a href="#org48b80a1">1.4. Test on Mirantis lab</a>
+<ul>
+<li><a href="#org03417f9">1.4.1. Env description</a></li>
+<li><a href="#orgb4b25e9">1.4.2. Apply the patch for the scheduler</a></li>
+<li><a href="#orgab8c16e">1.4.3. Boot VMs</a></li>
+<li><a href="#orge8b5d85">1.4.4. Check VM distribution</a></li>
+<li><a href="#org6d336a1">1.4.5. Analysis of what happened</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-org70d1e55" class="outline-2">
+<h2 id="org70d1e55"><span class="section-number-2">1</span> Nova Scheduler</h2>
+<div class="outline-text-2" id="text-1">
+</div>
+<div id="outline-container-orgb326f58" class="outline-3">
+<h3 id="orgb326f58"><span class="section-number-3">1.1</span> Intro</h3>
+<div class="outline-text-3" id="text-1-1">
+<p>
+This doc contains 3 parts describing the following:<br />
+</p>
+
+<ul class="org-ul">
+<li>common Nova scheduler principles related to scheduler setup, scheduler logic of picking a host and<br />
+params affecting the scheduling process;<br /></li>
+<li>information about Mirantis analyzer tool for Nova scheduling;<br /></li>
+<li>log of booting VMs on Mirantis test lab.<br /></li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-orgfd6f9bc" class="outline-3">
+<h3 id="orgfd6f9bc"><span class="section-number-3">1.2</span> Nova Scheduler</h3>
+<div class="outline-text-3" id="text-1-2">
+</div>
+<div id="outline-container-org811b1c7" class="outline-4">
+<h4 id="org811b1c7"><span class="section-number-4">1.2.1</span> Scheduler Setup</h4>
+<div class="outline-text-4" id="text-1-2-1">
+<p>
+Nova scheduling process is configurable. First of all, you can choose what driver for scheduling is<br />
+used in <b>CONF/scheduler/driver</b> <sup><a id="fnr.1" class="footref" href="#fn.1">1</a></sup>. Several options are available e.g. filter_scheduler,<br />
+caching_scheduler or chance_scheduler. As the filter_scheduler is used by default, in this doc the<br />
+most attention is focused on it. Next important setting is <b>CONF/scheduler/host_manager</b> <sup><a id="fnr.2" class="footref" href="#fn.2">2</a></sup><br />
+that represents the in-memory picture of the hosts and their properties that scheduler takes into<br />
+account.<br />
+</p>
+
+<p>
+For the filter_scheduler important settings are <b>CONF/filter_scheduler/available_filters</b> which are<br />
+links to python objects loaded into memory and could be used in<br />
+<b>CONF/filter_scheduler/enabled_filters</b> that are <b>really</b> used for filtering.<br />
+</p>
+
+<p>
+<b>CONF/filter_scheduler/weight_classes</b> is a list of python objects using for weighing hosts.<br />
+</p>
+
+<p>
+In MCP the filter_scheduler is used with Nova default host manager. The following filters are<br />
+enabled:<br />
+</p>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+</colgroup>
+<tbody>
+<tr>
+<td class="org-left">DifferentHostFilter</td>
+</tr>
+
+<tr>
+<td class="org-left">SameHostFilter</td>
+</tr>
+
+<tr>
+<td class="org-left">RetryFilter</td>
+</tr>
+
+<tr>
+<td class="org-left">AvailabilityZoneFilter</td>
+</tr>
+
+<tr>
+<td class="org-left">RamFilter</td>
+</tr>
+
+<tr>
+<td class="org-left">CoreFilter</td>
+</tr>
+
+<tr>
+<td class="org-left">DiskFilter</td>
+</tr>
+
+<tr>
+<td class="org-left">ComputeFilter</td>
+</tr>
+
+<tr>
+<td class="org-left">ComputeCapabilitiesFilter</td>
+</tr>
+
+<tr>
+<td class="org-left">ImagePropertiesFilter</td>
+</tr>
+
+<tr>
+<td class="org-left">ServerGroupAntiAffinityFilter</td>
+</tr>
+
+<tr>
+<td class="org-left">ServerGroupAffinityFilter</td>
+</tr>
+
+<tr>
+<td class="org-left">PciPassthroughFilter</td>
+</tr>
+
+<tr>
+<td class="org-left">NUMATopologyFilter</td>
+</tr>
+
+<tr>
+<td class="org-left">AggregateInstanceExtraSpecsFilter</td>
+</tr>
+</tbody>
+</table>
+
+<p>
+A good description could be found in filter scheduler Nova docs <sup><a id="fnr.3" class="footref" href="#fn.3">3</a></sup>.<br />
+</p>
+</div>
+</div>
+
+<div id="outline-container-org4be7cea" class="outline-4">
+<h4 id="org4be7cea"><span class="section-number-4">1.2.2</span> Scheduler logic</h4>
+<div class="outline-text-4" id="text-1-2-2">
+<p>
+The filter scheduler has several phases:<br />
+</p>
+
+<ol class="org-ol">
+<li>Get all available compute nodes. Depending on Nova release it either<br />
+could be a request from DB or the Placement service. In Ocata, Placement is in reporting mode<br />
+only it means data are sent to Placement but not used for scheduling. In Pike+ release Placement<br />
+is a part of scheduling to get hosts and put allocations.<br /></li>
+<li>Filter gotten hosts. The list of hosts go through each filter in the<br />
+order specified in <b>CONF/filter_scheduler/enabled_filters</b>. For each host a filter returns either<br />
+true or false.<br /></li>
+<li><p>
+Weigh hosts and sort host according to weights in a descending order.<br />
+In Ocata, the following list of weighers is used:<br />
+</p>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+</colgroup>
+<tbody>
+<tr>
+<td class="org-left">DiskWeigher</td>
+</tr>
+
+<tr>
+<td class="org-left">IoOpsWeigher</td>
+</tr>
+
+<tr>
+<td class="org-left">MetricsWeigher</td>
+</tr>
+
+<tr>
+<td class="org-left">RAMWeigher</td>
+</tr>
+
+<tr>
+<td class="org-left">ServerGroupSoftAffinityWeigher</td>
+</tr>
+
+<tr>
+<td class="org-left">ServerGroupSoftAntiAffinityWeigher</td>
+</tr>
+</tbody>
+</table>
+
+<p>
+Each weigher calculates weight for a list of host. After that those calculated normalized basing on<br />
+min and max values. Final weight for host is calculated as sum of weights * weight_multiplier.<br />
+weight_multiplier is specified in CONF. Default multipliers are the following:<br />
+</p>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-right" />
+</colgroup>
+<tbody>
+<tr>
+<td class="org-left">ram_weight_multiplier</td>
+<td class="org-right">1.0</td>
+</tr>
+
+<tr>
+<td class="org-left">disk_weight_multiplier</td>
+<td class="org-right">1.0</td>
+</tr>
+
+<tr>
+<td class="org-left">io_ops_weight_multiplier</td>
+<td class="org-right">-1.0</td>
+</tr>
+
+<tr>
+<td class="org-left">soft_affinity_weight_multiplier</td>
+<td class="org-right">1.0</td>
+</tr>
+
+<tr>
+<td class="org-left">soft_anti_affinity_weight_multiplier</td>
+<td class="org-right">1.0</td>
+</tr>
+</tbody>
+</table>
+
+<p>
+A negative value means the logic is reversed, e.g. the more io_ops on a host<br />
+the lower host is on the sorted list.<br />
+</p></li>
+
+<li>Cut the weighed host list according to the <b>CONF/filter_scheduler/host_subset_size</b><br />
+the default is 1.<br /></li>
+
+<li>Pick a random host from weighed host subset.<br /></li>
+</ol>
+
+<p>
+Let's see some simple cases.<br />
+</p>
+
+<ol class="org-ol">
+<li>Equal hosts scheduling.<br />
+We have several equal hosts, let's assume that filters pass all hosts, in that<br />
+case only weighers affect scheduling. On the first request, a host is picked<br />
+depending on the order in the DB, probably the order of creation.<br />
+On the next requests, the most un-occupied hosts are picked.<br /></li>
+
+<li>Big+small hosts scheduling.<br />
+In that case, most powerful hosts are used until their remaining resources<br />
+will be less or equal to the other less powerful hosts.<br /></li>
+
+<li>Lay aside scheduling for hosts with big disks.<br />
+In that case, we need to set disk_weight_multiplier to a negative value.<br />
+For example, we have hosts with 4Tb disks (big) and 512Gb disks (small).<br />
+Setting disk_weight_multiplier to -10 allows to schedule on a host with small<br />
+disks first. This assumes that other host params besides the disk space<br />
+are equal.<br /></li>
+</ol>
+</div>
+</div>
+
+<div id="outline-container-org6ec5324" class="outline-4">
+<h4 id="org6ec5324"><span class="section-number-4">1.2.3</span> Params affecting scheduling</h4>
+<div class="outline-text-4" id="text-1-2-3">
+<p>
+The ways affect scheduling is mostly coded in filters.<br />
+The following params could affect scheduling:<br />
+</p>
+
+<ul class="org-ul">
+<li>availability_zone - a param for create server request <sup><a id="fnr.4" class="footref" href="#fn.4">4</a></sup>, it restricts the list of<br />
+hosts can be used to the hosts with particular availability_zone;<br /></li>
+<li><p>
+scheduler_hints - params for the create server request<br />
+</p>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+</colgroup>
+<tbody>
+<tr>
+<td class="org-left">build_near_host_ip</td>
+</tr>
+
+<tr>
+<td class="org-left">cidr</td>
+</tr>
+
+<tr>
+<td class="org-left">different_cell</td>
+</tr>
+
+<tr>
+<td class="org-left">different_host</td>
+</tr>
+
+<tr>
+<td class="org-left">group</td>
+</tr>
+
+<tr>
+<td class="org-left">query</td>
+</tr>
+
+<tr>
+<td class="org-left">same_host</td>
+</tr>
+
+<tr>
+<td class="org-left">target_cell</td>
+</tr>
+</tbody>
+</table></li>
+
+<li><p>
+flavor extra_specs<br />
+</p>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+</colgroup>
+<tbody>
+<tr>
+<td class="org-left">pci_passthrough:alias</td>
+</tr>
+
+<tr>
+<td class="org-left">hw:cpu_policy</td>
+</tr>
+
+<tr>
+<td class="org-left">hw:cpu_thread_policy</td>
+</tr>
+
+<tr>
+<td class="org-left">aggregate_instance_extra_specs</td>
+</tr>
+
+<tr>
+<td class="org-left">capabilities:*</td>
+</tr>
+</tbody>
+</table></li>
+
+<li><p>
+image properties<br />
+</p>
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+</colgroup>
+<tbody>
+<tr>
+<td class="org-left">hw:cpu_policy</td>
+</tr>
+
+<tr>
+<td class="org-left">hw:cpu_thread_policy</td>
+</tr>
+
+<tr>
+<td class="org-left">hw_architecture</td>
+</tr>
+
+<tr>
+<td class="org-left">img_hv_type</td>
+</tr>
+
+<tr>
+<td class="org-left">hw_vm_mode</td>
+</tr>
+
+<tr>
+<td class="org-left">img_hv_requested_version</td>
+</tr>
+</tbody>
+</table></li>
+
+<li><p>
+Placement allocation candidate request options.<br />
+Since Pike+ it is possible to specify params for the Placement request with<br />
+flavor extra specs:<br />
+</p>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+</colgroup>
+<tbody>
+<tr>
+<td class="org-left">resources:$RESOURCE_CLASS: $AMOUNT</td>
+</tr>
+
+<tr>
+<td class="org-left">resources$N:$RESOURCE_CLASS: $AMOUNT</td>
+</tr>
+
+<tr>
+<td class="org-left">trait:$TRAIT_NAME: required</td>
+</tr>
+
+<tr>
+<td class="org-left">trait$N:$TRAIT_NAME: required</td>
+</tr>
+</tbody>
+</table></li>
+</ul>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgb38547b" class="outline-3">
+<h3 id="orgb38547b"><span class="section-number-3">1.3</span> Debug scheduling</h3>
+<div class="outline-text-3" id="text-1-3">
+<p>
+As there many factors affecting the scheduling process sometimes it<br />
+needs to go deeper to understand what happens. The questions<br />
+wanted to be answered could be:<br />
+</p>
+<ul class="org-ul">
+<li>How many hosts were gotten by the scheduler? What are they?<br /></li>
+<li>How many hosts were passed/rejected by each filter? What are they?<br /></li>
+<li>What weight the host have? What value was gotten from the particular weigher?<br /></li>
+<li>What host was chosen and where VM is actually placed?<br /></li>
+</ul>
+
+<p>
+For that purpose, Mirantis implemented a patch that logs all required data<br />
+in JSON-format into a file specified by <b>CONF/filter_scheduler/scheduler_debug_file</b>.<br />
+</p>
+
+<p>
+After booting a VM, scheduler_debug_file could be uploaded into DB<br />
+and analyzed with arbitrary SQL-queries.<br />
+</p>
+</div>
+</div>
+
+<div id="outline-container-org48b80a1" class="outline-3">
+<h3 id="org48b80a1"><span class="section-number-3">1.4</span> Test on Mirantis lab</h3>
+<div class="outline-text-3" id="text-1-4">
+</div>
+<div id="outline-container-org03417f9" class="outline-4">
+<h4 id="org03417f9"><span class="section-number-4">1.4.1</span> Env description</h4>
+<div class="outline-text-4" id="text-1-4-1">
+<p>
+There is an env with 20 compute nodes.<br />
+</p>
+
+<div class="org-src-container">
+<pre class="src src-shell">openstack hypervisor list
+</pre>
+</div>
+
+<!-- This HTML table template is generated by emacs 26.0.50.2 -->
+<table border="1">
+  <tr>
+    <td align="left" valign="top">
+      &nbsp;ID&nbsp;
+    </td>
+    <td align="left" valign="top">
+      &nbsp;Hypervisor&nbsp;Hostname&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+    </td>
+    <td align="left" valign="top">
+      &nbsp;Hypervisor&nbsp;Type&nbsp;
+    </td>
+    <td align="left" valign="top">
+      &nbsp;Host&nbsp;IP&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+    </td>
+    <td align="left" valign="top">
+      &nbsp;State&nbsp;
+    </td>
+  </tr>
+  <tr>
+    <td align="left" valign="top">
+      &nbsp;&nbsp;1&nbsp;<br />
+      &nbsp;&nbsp;4&nbsp;<br />
+      &nbsp;&nbsp;7&nbsp;<br />
+      &nbsp;10&nbsp;<br />
+      &nbsp;13&nbsp;<br />
+      &nbsp;16&nbsp;<br />
+      &nbsp;19&nbsp;<br />
+      &nbsp;22&nbsp;<br />
+      &nbsp;25&nbsp;<br />
+      &nbsp;28&nbsp;<br />
+      &nbsp;31&nbsp;<br />
+      &nbsp;34&nbsp;<br />
+      &nbsp;37&nbsp;<br />
+      &nbsp;40&nbsp;<br />
+      &nbsp;43&nbsp;<br />
+      &nbsp;46&nbsp;<br />
+      &nbsp;49&nbsp;<br />
+      &nbsp;52&nbsp;<br />
+      &nbsp;55&nbsp;<br />
+      &nbsp;58&nbsp;
+    </td>
+    <td align="left" valign="top">
+      &nbsp;cmp13.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local&nbsp;<br />
+      &nbsp;cmp17.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local&nbsp;<br />
+      &nbsp;cmp12.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local&nbsp;<br />
+      &nbsp;cmp15.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local&nbsp;<br />
+      &nbsp;cmp1.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local&nbsp;&nbsp;<br />
+      &nbsp;cmp2.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local&nbsp;&nbsp;<br />
+      &nbsp;cmp16.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local&nbsp;<br />
+      &nbsp;cmp6.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local&nbsp;&nbsp;<br />
+      &nbsp;cmp10.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local&nbsp;<br />
+      &nbsp;cmp4.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local&nbsp;&nbsp;<br />
+      &nbsp;cmp0.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local&nbsp;&nbsp;<br />
+      &nbsp;cmp9.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local&nbsp;&nbsp;<br />
+      &nbsp;cmp14.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local&nbsp;<br />
+      &nbsp;cmp18.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local&nbsp;<br />
+      &nbsp;cmp19.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local&nbsp;<br />
+      &nbsp;cmp3.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local&nbsp;&nbsp;<br />
+      &nbsp;cmp8.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local&nbsp;&nbsp;<br />
+      &nbsp;cmp5.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local&nbsp;&nbsp;<br />
+      &nbsp;cmp11.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local&nbsp;<br />
+      &nbsp;cmp7.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local&nbsp;&nbsp;
+    </td>
+    <td align="left" valign="top">
+      &nbsp;QEMU&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;QEMU&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;QEMU&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;QEMU&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;QEMU&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;QEMU&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;QEMU&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;QEMU&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;QEMU&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;QEMU&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;QEMU&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;QEMU&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;QEMU&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;QEMU&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;QEMU&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;QEMU&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;QEMU&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;QEMU&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;QEMU&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;QEMU&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+    </td>
+    <td align="left" valign="top">
+      &nbsp;172.16.10.96&nbsp;&nbsp;<br />
+      &nbsp;172.16.10.112&nbsp;<br />
+      &nbsp;172.16.10.108&nbsp;<br />
+      &nbsp;172.16.10.99&nbsp;&nbsp;<br />
+      &nbsp;172.16.10.107&nbsp;<br />
+      &nbsp;172.16.10.113&nbsp;<br />
+      &nbsp;172.16.10.106&nbsp;<br />
+      &nbsp;172.16.10.103&nbsp;<br />
+      &nbsp;172.16.10.109&nbsp;<br />
+      &nbsp;172.16.10.111&nbsp;<br />
+      &nbsp;172.16.10.104&nbsp;<br />
+      &nbsp;172.16.10.110&nbsp;<br />
+      &nbsp;172.16.10.105&nbsp;<br />
+      &nbsp;172.16.10.101&nbsp;<br />
+      &nbsp;172.16.10.114&nbsp;<br />
+      &nbsp;172.16.10.102&nbsp;<br />
+      &nbsp;172.16.10.100&nbsp;<br />
+      &nbsp;172.16.10.97&nbsp;&nbsp;<br />
+      &nbsp;172.16.10.98&nbsp;&nbsp;<br />
+      &nbsp;172.16.10.95&nbsp;&nbsp;
+    </td>
+    <td align="left" valign="top">
+      &nbsp;up&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;up&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;up&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;up&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;up&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;up&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;up&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;up&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;up&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;up&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;up&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;up&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;up&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;up&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;up&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;up&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;up&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;up&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;up&nbsp;&nbsp;&nbsp;&nbsp;<br />
+      &nbsp;up&nbsp;&nbsp;&nbsp;&nbsp;
+    </td>
+  </tr>
+</table>
+
+<p>
+Set scheduler_subset_size to 1.<br />
+</p>
+
+<div class="org-src-container">
+<pre class="src src-sh">salt ctl* pkg.install crudini --no-color
+salt ctl* cmd.run <span style="color: #71a19f;">'crudini --set /etc/nova/nova.conf filter_scheduler host_subset_size 1'</span> --no-color
+salt ctl* cmd.run <span style="color: #71a19f;">'systemctl restart nova-scheduler'</span> --no-color
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgb4b25e9" class="outline-4">
+<h4 id="orgb4b25e9"><span class="section-number-4">1.4.2</span> Apply the patch for the scheduler</h4>
+<div class="outline-text-4" id="text-1-4-2">
+<p>
+Patch scheduler to log inner state.<br />
+</p>
+
+<div class="org-src-container">
+<pre class="src src-sh"><span style="color: #71a46c;">cd</span> ~/m/nova
+git co mcp/ocata
+git format-patch -1 HEAD
+scp 0001-Add-debug-logging-for-scheduler.patch o20-cfg:/tmp/
+</pre>
+</div>
+
+<div class="org-src-container">
+<pre class="src src-sh">salt-cp ctl* /tmp/0001-Add-debug-logging-for-scheduler.patch /tmp/0001-Add-debug-logging-for-scheduler.patch
+salt ctl* cmd.run <span style="color: #71a19f;">'cd /usr/lib/python2.7/dist-packages/; patch -p1 --backup &lt; /tmp/0001-Add-debug-logging-for-scheduler.patch'</span>
+salt ctl* cmd.run <span style="color: #71a19f;">'systemctl restart nova-scheduler'</span> --no-color
+salt ctl* cmd.run <span style="color: #71a19f;">'rm /tmp/scheduling'</span> --no-color
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgab8c16e" class="outline-4">
+<h4 id="orgab8c16e"><span class="section-number-4">1.4.3</span> Boot VMs</h4>
+<div class="outline-text-4" id="text-1-4-3">
+<div class="org-src-container">
+<pre class="src src-shell">openstack server list -c ID -f value | xargs openstack server delete
+<span style="color: #c27d7b;">flavor</span>=f1; <span style="color: #c27d7b;">img</span>=8466bbdb-7bd3-4528-a3a3-a3b1c9ecbb32; <span style="color: #96905f; font-weight: bold;">for</span> i<span style="color: #96905f; font-weight: bold;"> in</span> {1..20}; <span style="color: #96905f; font-weight: bold;">do</span> nova boot --flavor $<span style="color: #c27d7b;">flavor</span> --image $<span style="color: #c27d7b;">img</span> vm-$<span style="color: #c27d7b;">i</span>; sleep 10; <span style="color: #96905f; font-weight: bold;">done</span>
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orge8b5d85" class="outline-4">
+<h4 id="orge8b5d85"><span class="section-number-4">1.4.4</span> Check VM distribution</h4>
+<div class="outline-text-4" id="text-1-4-4">
+<div class="org-src-container">
+<pre class="src src-sh">openstack server list -c Name -f value | wc -l
+openstack server list --long -c Host -f value | sort | uniq -c
+</pre>
+</div>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-right" />
+</colgroup>
+<tbody>
+<tr>
+<td class="org-right">20</td>
+</tr>
+</tbody>
+</table>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+</colgroup>
+<tbody>
+<tr>
+<td class="org-left">1 cmp0</td>
+</tr>
+
+<tr>
+<td class="org-left">1 cmp1</td>
+</tr>
+
+<tr>
+<td class="org-left">1 cmp10</td>
+</tr>
+
+<tr>
+<td class="org-left">1 cmp11</td>
+</tr>
+
+<tr>
+<td class="org-left">1 cmp12</td>
+</tr>
+
+<tr>
+<td class="org-left">1 cmp13</td>
+</tr>
+
+<tr>
+<td class="org-left">1 cmp14</td>
+</tr>
+
+<tr>
+<td class="org-left">1 cmp15</td>
+</tr>
+
+<tr>
+<td class="org-left">1 cmp16</td>
+</tr>
+
+<tr>
+<td class="org-left">1 cmp17</td>
+</tr>
+
+<tr>
+<td class="org-left">1 cmp18</td>
+</tr>
+
+<tr>
+<td class="org-left">1 cmp19</td>
+</tr>
+
+<tr>
+<td class="org-left">1 cmp2</td>
+</tr>
+
+<tr>
+<td class="org-left">1 cmp3</td>
+</tr>
+
+<tr>
+<td class="org-left">1 cmp4</td>
+</tr>
+
+<tr>
+<td class="org-left">1 cmp5</td>
+</tr>
+
+<tr>
+<td class="org-left">1 cmp6</td>
+</tr>
+
+<tr>
+<td class="org-left">1 cmp7</td>
+</tr>
+
+<tr>
+<td class="org-left">1 cmp8</td>
+</tr>
+
+<tr>
+<td class="org-left">1 cmp9</td>
+</tr>
+</tbody>
+</table>
+
+<p>
+The same should be in the Placement service.<br />
+</p>
+
+<div class="org-src-container">
+<pre class="src src-sh"><span style="color: #96905f; font-weight: bold;">select</span> p.name, count(*) from allocations a join resource_providers p on a.resource_provider_id = p.id where resource_class_id = 0 group by 1;
+</pre>
+</div>
+
+<pre class="example">
++-------------------------------------------------------+----------+
+| name                                                  | count(*) |
++-------------------------------------------------------+----------+
+| cmp0.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  |        1 |
+| cmp1.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  |        1 |
+| cmp10.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local |        1 |
+| cmp11.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local |        1 |
+| cmp12.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local |        1 |
+| cmp13.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local |        1 |
+| cmp14.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local |        1 |
+| cmp15.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local |        1 |
+| cmp16.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local |        1 |
+| cmp17.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local |        1 |
+| cmp18.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local |        1 |
+| cmp19.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local |        1 |
+| cmp2.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  |        1 |
+| cmp3.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  |        1 |
+| cmp4.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  |        1 |
+| cmp5.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  |        1 |
+| cmp6.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  |        1 |
+| cmp7.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  |        1 |
+| cmp8.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  |        1 |
+| cmp9.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  |        1 |
++-------------------------------------------------------+----------+
+20 rows in set (0.00 sec)
+</pre>
+</div>
+</div>
+
+<div id="outline-container-org6d336a1" class="outline-4">
+<h4 id="org6d336a1"><span class="section-number-4">1.4.5</span> Analysis of what happened</h4>
+<div class="outline-text-4" id="text-1-4-5">
+<div class="org-src-container">
+<pre class="src src-sh">salt <span style="color: #71a19f;">'ctl*'</span> cp.get_file_str /tmp/scheduling | grep <span style="color: #71a19f;">'{'</span> &gt; /tmp/scheduling
+</pre>
+</div>
+
+<div class="org-src-container">
+<pre class="src src-sh">scp o20-cfg:/tmp/scheduling /tmp/scheduling
+<span style="color: #71a46c;">cd</span> /tmp
+rm /tmp/scheduling.sqlite
+create_db_from_json.py scheduling
+</pre>
+</div>
+
+<p>
+See the number of requests and created time.<br />
+</p>
+
+<div class="org-src-container">
+<pre class="src src-sqlite"><span style="color: #96905f; font-weight: bold;">select</span> server, req, <span style="color: #96905f; font-weight: bold;">host</span>, created <span style="color: #96905f; font-weight: bold;">from</span> scheduling <span style="color: #96905f; font-weight: bold;">where</span> step = <span style="color: #71a19f;">'random'</span> <span style="color: #96905f; font-weight: bold;">order</span> <span style="color: #96905f; font-weight: bold;">by</span> created;
+</pre>
+</div>
+
+<p>
+See numbers of hosts for each step.<br />
+</p>
+
+<div class="org-src-container">
+<pre class="src src-sqlite"><span style="color: #96905f; font-weight: bold;">select</span> step, filter, <span style="color: #71a46c;">count</span>(*) <span style="color: #96905f; font-weight: bold;">from</span> scheduling <span style="color: #96905f; font-weight: bold;">where</span> req = <span style="color: #71a19f;">'req-87cfd45a-d75f-497e-852d-902c009df4e4'</span> <span style="color: #96905f; font-weight: bold;">group</span> <span style="color: #96905f; font-weight: bold;">by</span> 1, 2 <span style="color: #96905f; font-weight: bold;">order</span> <span style="color: #96905f; font-weight: bold;">by</span> created;
+</pre>
+</div>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-left" />
+
+<col  class="org-right" />
+</colgroup>
+<tbody>
+<tr>
+<td class="org-left">load</td>
+<td class="org-left">&#xa0;</td>
+<td class="org-right">20</td>
+</tr>
+
+<tr>
+<td class="org-left">filtering</td>
+<td class="org-left">DifferentHostFilter</td>
+<td class="org-right">20</td>
+</tr>
+
+<tr>
+<td class="org-left">filtering</td>
+<td class="org-left">SameHostFilter</td>
+<td class="org-right">20</td>
+</tr>
+
+<tr>
+<td class="org-left">filtering</td>
+<td class="org-left">RetryFilter</td>
+<td class="org-right">20</td>
+</tr>
+
+<tr>
+<td class="org-left">filtering</td>
+<td class="org-left">AvailabilityZoneFilter</td>
+<td class="org-right">20</td>
+</tr>
+
+<tr>
+<td class="org-left">filtering</td>
+<td class="org-left">RamFilter</td>
+<td class="org-right">20</td>
+</tr>
+
+<tr>
+<td class="org-left">filtering</td>
+<td class="org-left">CoreFilter</td>
+<td class="org-right">20</td>
+</tr>
+
+<tr>
+<td class="org-left">filtering</td>
+<td class="org-left">DiskFilter</td>
+<td class="org-right">20</td>
+</tr>
+
+<tr>
+<td class="org-left">filtering</td>
+<td class="org-left">ComputeFilter</td>
+<td class="org-right">20</td>
+</tr>
+
+<tr>
+<td class="org-left">filtering</td>
+<td class="org-left">ComputeCapabilitiesFilter</td>
+<td class="org-right">20</td>
+</tr>
+
+<tr>
+<td class="org-left">filtering</td>
+<td class="org-left">ImagePropertiesFilter</td>
+<td class="org-right">20</td>
+</tr>
+
+<tr>
+<td class="org-left">filtering</td>
+<td class="org-left">ServerGroupAntiAffinityFilter</td>
+<td class="org-right">20</td>
+</tr>
+
+<tr>
+<td class="org-left">filtering</td>
+<td class="org-left">ServerGroupAffinityFilter</td>
+<td class="org-right">20</td>
+</tr>
+
+<tr>
+<td class="org-left">filtering</td>
+<td class="org-left">PciPassthroughFilter</td>
+<td class="org-right">20</td>
+</tr>
+
+<tr>
+<td class="org-left">filtering</td>
+<td class="org-left">NUMATopologyFilter</td>
+<td class="org-right">20</td>
+</tr>
+
+<tr>
+<td class="org-left">filtering</td>
+<td class="org-left">AggregateInstanceExtraSpecsFilter</td>
+<td class="org-right">20</td>
+</tr>
+
+<tr>
+<td class="org-left">weighing</td>
+<td class="org-left">&#xa0;</td>
+<td class="org-right">20</td>
+</tr>
+
+<tr>
+<td class="org-left">subset</td>
+<td class="org-left">&#xa0;</td>
+<td class="org-right">1</td>
+</tr>
+
+<tr>
+<td class="org-left">random</td>
+<td class="org-left">&#xa0;</td>
+<td class="org-right">1</td>
+</tr>
+</tbody>
+</table>
+
+<p>
+See weights for the first request.<br />
+</p>
+
+<div class="org-src-container">
+<pre class="src src-sqlite"><span style="color: #96905f; font-weight: bold;">select</span> <span style="color: #96905f; font-weight: bold;">host</span>, weight, weights <span style="color: #96905f; font-weight: bold;">from</span> scheduling <span style="color: #96905f; font-weight: bold;">where</span> req = <span style="color: #71a19f;">'req-87cfd45a-d75f-497e-852d-902c009df4e4'</span> <span style="color: #96905f; font-weight: bold;">and</span> step = <span style="color: #71a19f;">'weighing'</span> <span style="color: #96905f; font-weight: bold;">order</span> <span style="color: #96905f; font-weight: bold;">by</span> id;
+</pre>
+</div>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-right" />
+
+<col  class="org-left" />
+</colgroup>
+<tbody>
+<tr>
+<td class="org-left">cmp15</td>
+<td class="org-right">2.0</td>
+<td class="org-left">{u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp1</td>
+<td class="org-right">2.0</td>
+<td class="org-left">{u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp5</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp2</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp8</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp11</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp19</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp4</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp9</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp3</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp12</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp7</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp0</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp17</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp18</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp14</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp16</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp10</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp6</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp13</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+</tbody>
+</table>
+
+<p>
+See weights for the second request.<br />
+</p>
+
+<div class="org-src-container">
+<pre class="src src-sqlite"><span style="color: #96905f; font-weight: bold;">select</span> <span style="color: #96905f; font-weight: bold;">host</span>, weight, weights <span style="color: #96905f; font-weight: bold;">from</span> scheduling <span style="color: #96905f; font-weight: bold;">where</span> req = <span style="color: #71a19f;">'req-3cc00bce-a93f-4f0c-b80d-066fe53abe5b'</span> <span style="color: #96905f; font-weight: bold;">and</span> step = <span style="color: #71a19f;">'weighing'</span> <span style="color: #96905f; font-weight: bold;">order</span> <span style="color: #96905f; font-weight: bold;">by</span> id;
+</pre>
+</div>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-right" />
+
+<col  class="org-left" />
+</colgroup>
+<tbody>
+<tr>
+<td class="org-left">cmp5</td>
+<td class="org-right">2.0</td>
+<td class="org-left">{u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp4</td>
+<td class="org-right">2.0</td>
+<td class="org-left">{u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp0</td>
+<td class="org-right">2.0</td>
+<td class="org-left">{u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp17</td>
+<td class="org-right">2.0</td>
+<td class="org-left">{u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp18</td>
+<td class="org-right">2.0</td>
+<td class="org-left">{u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp14</td>
+<td class="org-right">2.0</td>
+<td class="org-left">{u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp1</td>
+<td class="org-right">2.0</td>
+<td class="org-left">{u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp6</td>
+<td class="org-right">2.0</td>
+<td class="org-left">{u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp2</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp8</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp11</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp19</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp9</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp3</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp12</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp7</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp16</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp10</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp13</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp15</td>
+<td class="org-right">0.965734172132</td>
+<td class="org-left">{u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 0.9657341721322447, u'IoOpsWeigher': 0.0, u'MetricsWeigher': 0.0}</td>
+</tr>
+</tbody>
+</table>
+
+<div class="org-src-container">
+<pre class="src src-sqlite"><span style="color: #96905f; font-weight: bold;">select</span> <span style="color: #96905f; font-weight: bold;">host</span>, weight, weights <span style="color: #96905f; font-weight: bold;">from</span> scheduling <span style="color: #96905f; font-weight: bold;">where</span> req = <span style="color: #71a19f;">'req-653de11c-26bd-46ec-98e8-3f95b5c5ddc2'</span> <span style="color: #96905f; font-weight: bold;">and</span> step = <span style="color: #71a19f;">'weighing'</span> <span style="color: #96905f; font-weight: bold;">order</span> <span style="color: #96905f; font-weight: bold;">by</span> id;
+</pre>
+</div>
+
+<p>
+See weights for the third request.<br />
+</p>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-right" />
+
+<col  class="org-left" />
+</colgroup>
+<tbody>
+<tr>
+<td class="org-left">cmp4</td>
+<td class="org-right">2.0</td>
+<td class="org-left">{u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp3</td>
+<td class="org-right">2.0</td>
+<td class="org-left">{u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp0</td>
+<td class="org-right">2.0</td>
+<td class="org-left">{u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp17</td>
+<td class="org-right">2.0</td>
+<td class="org-left">{u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp18</td>
+<td class="org-right">2.0</td>
+<td class="org-left">{u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp14</td>
+<td class="org-right">2.0</td>
+<td class="org-left">{u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp1</td>
+<td class="org-right">2.0</td>
+<td class="org-left">{u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp16</td>
+<td class="org-right">2.0</td>
+<td class="org-left">{u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp10</td>
+<td class="org-right">2.0</td>
+<td class="org-left">{u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp6</td>
+<td class="org-right">2.0</td>
+<td class="org-left">{u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp2</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp8</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp11</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp19</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp9</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp12</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp7</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp13</td>
+<td class="org-right">1.97222222222</td>
+<td class="org-left">{u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp5</td>
+<td class="org-right">0.965734172132</td>
+<td class="org-left">{u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 0.9657341721322447, u'IoOpsWeigher': 0.0, u'MetricsWeigher': 0.0}</td>
+</tr>
+
+<tr>
+<td class="org-left">cmp15</td>
+<td class="org-right">0.965734172132</td>
+<td class="org-left">{u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 0.9657341721322447, u'IoOpsWeigher': 0.0, u'MetricsWeigher': 0.0}</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+<div id="footnotes">
+<h2 class="footnotes">Footnotes: </h2>
+<div id="text-footnotes">
+
+<div class="footdef"><sup><a id="fn.1" class="footnum" href="#fnr.1">1</a></sup> <div class="footpara"><p class="footpara">
+<a href="https://docs.openstack.org/nova/latest/configuration/config.html?highlight=host_manager#scheduler">https://docs.openstack.org/nova/latest/configuration/config.html?highlight=host_manager#scheduler</a><br />
+</p></div></div>
+
+<div class="footdef"><sup><a id="fn.2" class="footnum" href="#fnr.2">2</a></sup> <div class="footpara"><p class="footpara">
+<a href="https://docs.openstack.org/nova/latest/configuration/config.html?highlight=driver#scheduler">https://docs.openstack.org/nova/latest/configuration/config.html?highlight=driver#scheduler</a><br />
+</p></div></div>
+
+<div class="footdef"><sup><a id="fn.3" class="footnum" href="#fnr.3">3</a></sup> <div class="footpara"><p class="footpara">
+<a href="https://docs.openstack.org/nova/latest/user/filter-scheduler.html">https://docs.openstack.org/nova/latest/user/filter-scheduler.html</a><br />
+</p></div></div>
+
+<div class="footdef"><sup><a id="fn.4" class="footnum" href="#fnr.4">4</a></sup> <div class="footpara"><p class="footpara">
+<a href="https://developer.openstack.org/api-ref/compute/#create-server">https://developer.openstack.org/api-ref/compute/#create-server</a><br />
+</p></div></div>
+
+
+</div>
+</div></div>
+<div id="postamble" class="status">
+<p class="date">Date: 2018-04-26</p>
+<p class="author">Author: Andrey Volkov</p>
+<p class="date">Created: 2018-04-26 Thu 17:08</p>
+<p class="validation"><a href="http://validator.w3.org/check?uri=referer">Validate</a></p>
+</div>
+</body>
+</html>
