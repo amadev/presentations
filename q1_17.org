@@ -1177,7 +1177,7 @@ As 0-1 vcpus on destination node was allocated for the local VM,
 migrated VM originally pinned to 0-1 vcpus was allocated on 2-3 vcpus
 on the destination node.
 
-* Update and finalize SRIOV port pair allocation blueprint/spec
+* Update and finalize SR-IOV port pair allocation blueprint/spec
 
 (spec) User-controlled SR-IOV ports allocation
 https://review.openstack.org/#/c/182242/
@@ -1191,7 +1191,7 @@ https://review.openstack.org/#/c/448008/
 
 ** Devstack test
 
-Plan for sriov test:
+Plan for sr-iov test:
 1. Add fake pci devices to compute node.
    After nova-compute restart the pci_device table should be updated
    having fake pci devices there.
@@ -1347,7 +1347,7 @@ Plan for sriov test:
    openstack server create --flavor pci_network --image cirros-0.3.5-x86_64-disk $(rname.sh)
 
 
-** sriov config
+** sr-iov config
 
 https://docs.openstack.org/ocata/networking-guide/config-sriov.html#create-virtual-functions-compute
 
