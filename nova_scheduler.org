@@ -1,8 +1,15 @@
+#+TITLE: Nova Scheduler
+#+DATE: 2018-04-26
+#+AUTHOR: Andrey Volkov
+#+EMAIL: avolkov@mirantis.com
+#+OPTIONS: ^:nil
+#+OPTIONS: f:t
+
 * Nova Scheduler
 
 ** Intro
 
-This doc contains 3 part describing the following:
+This doc contains 3 parts describing the following:
 - common Nova scheduler principes related to scheduler setup, scheduler logic of picking a host
   and params affecting the scheduling process;
 - information about Mirantis analyzer tool for Nova scheduling;
@@ -13,13 +20,14 @@ This doc contains 3 part describing the following:
 *** Scheduler Setup
 
 Nova sheduling process is configurable. First of all you can choose
-what driver for scheduling is used in *CONF/scheduler/driver*
-[1]. Several options are available e.g. filter_scheduler,
-caching_scheduler or chance_scheduler. The filter_scheduler is used by
-default and in this doc the most attention is focused on it.  Next
-important setting is *CONF/scheduler/host_manager* [2] that represents
-the in-memory picture of the hosts and their properties that scheduler
-takes into account.
+what driver for scheduling is used in
+*CONF/scheduler/driver* [fn:1]. Several options are available
+e.g. filter_scheduler, caching_scheduler or chance_scheduler. The
+filter_scheduler is used by default and in this doc the most attention
+is focused on it.  Next important setting is
+*CONF/scheduler/host_manager* [fn:2] that represents the in-memory
+picture of the hosts and their properties that scheduler takes into
+account.
 
 For the filter_scheduler important settings are
 *CONF/filter_scheduler/available_filters* which are links to python
@@ -49,7 +57,7 @@ The following filters are enabled:
 | NUMATopologyFilter                |
 | AggregateInstanceExtraSpecsFilter |
 
-A good description could be found in filter scheduler Nova docs [3].
+A good description could be found in filter scheduler Nova docs [fn:3].
 
 *** Scheduler logic
 
@@ -103,7 +111,7 @@ Let's see some simple cases.
    depending on the order in the DB, probably the order of creation.
    On the next requests the most un-occupied hosts are picked.
 
-2. Big + small hosts scheduling.
+2. Big+small hosts scheduling.
    In that case, most powerfull hosts are used until their remaining resourses
    will be less or equal to the other less powerfull hosts.
 
@@ -119,7 +127,7 @@ Let's see some simple cases.
 The ways affect scheduling is mostly coded in filters.
 The following params could affect scheduling:
 
-- availability_zone - a param for create server request [4], restrict list of
+- availability_zone - a param for create server request [fn:4], restrict list of
   host can be used to the particular availability_zone;
 - scheduler_hints - params for create server request
   | build_near_host_ip |
@@ -131,7 +139,7 @@ The following params could affect scheduling:
   | same_host          |
   | target_cell        |
 
-- flavor extra_specs, e.g.
+- flavor extra_specs
   | pci_passthrough:alias          |
   | hw:cpu_policy                  |
   | hw:cpu_thread_policy           |
@@ -245,27 +253,28 @@ openstack server list -c Name -f value | wc -l
 openstack server list --long -c Host -f value | sort | uniq -c
 #+END_SRC
 
-20
-1 cmp0
-1 cmp1
-1 cmp10
-1 cmp11
-1 cmp12
-1 cmp13
-1 cmp14
-1 cmp15
-1 cmp16
-1 cmp17
-1 cmp18
-1 cmp19
-1 cmp2
-1 cmp3
-1 cmp4
-1 cmp5
-1 cmp6
-1 cmp7
-1 cmp8
-1 cmp9
+| 20 |
+
+| 1 cmp0  |
+| 1 cmp1  |
+| 1 cmp10 |
+| 1 cmp11 |
+| 1 cmp12 |
+| 1 cmp13 |
+| 1 cmp14 |
+| 1 cmp15 |
+| 1 cmp16 |
+| 1 cmp17 |
+| 1 cmp18 |
+| 1 cmp19 |
+| 1 cmp2  |
+| 1 cmp3  |
+| 1 cmp4  |
+| 1 cmp5  |
+| 1 cmp6  |
+| 1 cmp7  |
+| 1 cmp8  |
+| 1 cmp9  |
 
 The same should be in the Placement service;
 
@@ -448,3 +457,13 @@ See weights for the third request.
 | cmp13 |  1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
 | cmp5  | 0.965734172132 | {u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 0.9657341721322447, u'IoOpsWeigher': 0.0, u'MetricsWeigher': 0.0}                               |
 | cmp15 | 0.965734172132 | {u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 0.9657341721322447, u'IoOpsWeigher': 0.0, u'MetricsWeigher': 0.0}                               |
+
+[fn:1] https://docs.openstack.org/nova/latest/configuration/config.html?highlight=host_manager#scheduler
+
+[fn:2] https://docs.openstack.org/nova/latest/configuration/config.html?highlight=driver#scheduler
+
+[fn:3] https://docs.openstack.org/nova/latest/user/filter-scheduler.html
+
+[fn:4] https://developer.openstack.org/api-ref/compute/#create-server
+
+[fn:5] https://docs.openstack.org/nova/latest/admin/configuration/schedulers.html
