@@ -1,0 +1,450 @@
+* Nova Scheduler
+
+** Intro
+
+This doc contains 3 part describing the following:
+- common Nova scheduler principes related to scheduler setup, scheduler logic of picking a host
+  and params affecting the scheduling process;
+- information about Mirantis analyzer tool for Nova scheduling;
+- log of booting VMs on Mirantis test lab.
+
+** Nova Scheduler
+
+*** Scheduler Setup
+
+Nova sheduling process is configurable. First of all you can choose
+what driver for scheduling is used in *CONF/scheduler/driver*
+[1]. Several options are available e.g. filter_scheduler,
+caching_scheduler or chance_scheduler. The filter_scheduler is used by
+default and in this doc the most attention is focused on it.  Next
+important setting is *CONF/scheduler/host_manager* [2] that represents
+the in-memory picture of the hosts and their properties that scheduler
+takes into account.
+
+For the filter_scheduler important settings are
+*CONF/filter_scheduler/available_filters* which are links to python
+objects loaded into memory and could be used in
+*CONF/filter_scheduler/enabled_filters* that are *really* used for
+filtering.
+
+*CONF/filter_scheduler/weight_classes* is a list of python objects
+using for weighing hosts.
+
+In MCP the filter_scheduler is used with Nova default host manager.
+The following filters are enabled:
+
+| DifferentHostFilter               |
+| SameHostFilter                    |
+| RetryFilter                       |
+| AvailabilityZoneFilter            |
+| RamFilter                         |
+| CoreFilter                        |
+| DiskFilter                        |
+| ComputeFilter                     |
+| ComputeCapabilitiesFilter         |
+| ImagePropertiesFilter             |
+| ServerGroupAntiAffinityFilter     |
+| ServerGroupAffinityFilter         |
+| PciPassthroughFilter              |
+| NUMATopologyFilter                |
+| AggregateInstanceExtraSpecsFilter |
+
+A good description could be found in filter scheduler Nova docs [3].
+
+*** Scheduler logic
+
+The filter scheduler has several phases:
+
+1. Get all available compute nodes. Depending on Nova release it either
+could be a request into DB or the Placement service. In Ocata, Placement
+is in reporting mode only it means data are sent to Placement
+but not used for scheduling. In Pike+ release Placement is a part of
+scheduling to get hosts and put allocations.
+
+2. Filter gotten hosts. The list of hosts go through each filter in the
+order specified in *CONF/filter_scheduler/enabled_filters*. For each
+host a filter returns either true or false.
+
+3. Weigh hosts and sort host accorging to weights in a descending order.
+In Ocata, the following list of weighers is used:
+
+| DiskWeigher |
+| IoOpsWeigher |
+| MetricsWeigher |
+| RAMWeigher |
+| ServerGroupSoftAffinityWeigher |
+| ServerGroupSoftAntiAffinityWeigher |
+
+Each weigher calculates weight for a list of host. After that
+those calculated normalized basing on min and max values.
+Final weight for host is calculated as sum of weights * weight_multiplier.
+weight_multiplier is specified in CONF.
+Default multipliers are the following:
+
+| ram_weight_multiplier                |  1.0 |
+| disk_weight_multiplier               |  1.0 |
+| io_ops_weight_multiplier             | -1.0 |
+| soft_affinity_weight_multiplier      |  1.0 |
+| soft_anti_affinity_weight_multiplier |  1.0 |
+
+A negative value means the logic is reversed, e.g. the more io_ops on a host
+the lower host is on the sorted list.
+
+4. Cut the weighed host list according to the *CONF/filter_scheduler/host_subset_size*
+   default is 1.
+
+5. Pick a random host from weighed host subset.
+
+Let's see some simple cases.
+
+1. Equal hosts scheduling.
+   We have several equal hosts, let's assume that filters pass all hosts, in that
+   case only weighers affect scheduling. On the first request host is picked
+   depending on the order in the DB, probably the order of creation.
+   On the next requests the most un-occupied hosts are picked.
+
+2. Big + small hosts scheduling.
+   In that case, most powerfull hosts are used until their remaining resourses
+   will be less or equal to the other less powerfull hosts.
+
+3. Lay aside scheduling for hosts with big disks.
+   In that case, we need to set disk_weight_multiplier to a negative value.
+   For example, we have hosts with 4Tb disks (big) and 512Gb disks (small).
+   Setting disk_weight_multiplier to -10 allows to schedule on host with small
+   disks first. This assumes that other host params besides the disk space
+   are equal.
+
+*** Params affecting scheduling
+
+The ways affect scheduling is mostly coded in filters.
+The following params could affect scheduling:
+
+- availability_zone - a param for create server request [4], restrict list of
+  host can be used to the particular availability_zone;
+- scheduler_hints - params for create server request
+  | build_near_host_ip |
+  | cidr               |
+  | different_cell     |
+  | different_host     |
+  | group              |
+  | query              |
+  | same_host          |
+  | target_cell        |
+
+- flavor extra_specs, e.g.
+  | pci_passthrough:alias          |
+  | hw:cpu_policy                  |
+  | hw:cpu_thread_policy           |
+  | aggregate_instance_extra_specs |
+  | capabilities:*                 |
+
+- image properties
+  | hw:cpu_policy            |
+  | hw:cpu_thread_policy     |
+  | hw_architecture          |
+  | img_hv_type              |
+  | hw_vm_mode               |
+  | img_hv_requested_version |
+
+- Placement allocation candidate request options.
+  Since Pike+ it is possible to specify params for the Placement request with
+  flavor extra specs:
+  | resources:$RESOURCE_CLASS: $AMOUNT   |
+  | resources$N:$RESOURCE_CLASS: $AMOUNT |
+  | trait:$TRAIT_NAME: required          |
+  | trait$N:$TRAIT_NAME: required        |
+
+** Debug scheduling
+
+As there many factors affecting the scheduling process some times it
+needs to go deeper to understand what happening. The questions
+wanted to be answered could be:
+- How many hosts were gotten by the scheduler? What are they?
+- How many hosts were passed/rejected by the each filter? What are they?
+- What weight the host have? What value was gotten from the particular weigher?
+- What host were chosen and where VM is actually placed?
+
+For that purpose Mirantis implemented a patch that logs all required data
+in json-format into a file specified by *CONF/filter_scheduler/scheduler_debug_file*.
+
+After booting a VM, scheduler_debug_file could be uploaded into DB
+and analyzed with arbitrary sql-queries.
+
+** Test on Mirantis lab
+
+*** Env description
+
+There is an env with 20 compute nodes.
+
+#+BEGIN_SRC shell :session shell-o20-ctl01 :results raw replace
+openstack hypervisor list
+#+END_SRC
+
++----+-------------------------------------------------------+-----------------+---------------+-------+
+| ID | Hypervisor Hostname                                   | Hypervisor Type | Host IP       | State |
++----+-------------------------------------------------------+-----------------+---------------+-------+
+|  1 | cmp13.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local | QEMU            | 172.16.10.96  | up    |
+|  4 | cmp17.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local | QEMU            | 172.16.10.112 | up    |
+|  7 | cmp12.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local | QEMU            | 172.16.10.108 | up    |
+| 10 | cmp15.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local | QEMU            | 172.16.10.99  | up    |
+| 13 | cmp1.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  | QEMU            | 172.16.10.107 | up    |
+| 16 | cmp2.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  | QEMU            | 172.16.10.113 | up    |
+| 19 | cmp16.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local | QEMU            | 172.16.10.106 | up    |
+| 22 | cmp6.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  | QEMU            | 172.16.10.103 | up    |
+| 25 | cmp10.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local | QEMU            | 172.16.10.109 | up    |
+| 28 | cmp4.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  | QEMU            | 172.16.10.111 | up    |
+| 31 | cmp0.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  | QEMU            | 172.16.10.104 | up    |
+| 34 | cmp9.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  | QEMU            | 172.16.10.110 | up    |
+| 37 | cmp14.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local | QEMU            | 172.16.10.105 | up    |
+| 40 | cmp18.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local | QEMU            | 172.16.10.101 | up    |
+| 43 | cmp19.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local | QEMU            | 172.16.10.114 | up    |
+| 46 | cmp3.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  | QEMU            | 172.16.10.102 | up    |
+| 49 | cmp8.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  | QEMU            | 172.16.10.100 | up    |
+| 52 | cmp5.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  | QEMU            | 172.16.10.97  | up    |
+| 55 | cmp11.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local | QEMU            | 172.16.10.98  | up    |
+| 58 | cmp7.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  | QEMU            | 172.16.10.95  | up    |
++----+-------------------------------------------------------+-----------------+---------------+-------+
+
+Set scheduler_subset_size to 1.
+
+#+BEGIN_SRC sh :session shell-o20-cfg :results silent
+salt ctl* pkg.install crudini --no-color
+salt ctl* cmd.run 'crudini --set /etc/nova/nova.conf filter_scheduler host_subset_size 1' --no-color
+salt ctl* cmd.run 'systemctl restart nova-scheduler' --no-color
+#+END_SRC
+
+*** Apply the patch for scheduler
+
+Patch scheduler to log inner state.
+
+#+BEGIN_SRC sh :session shell-default :results silent
+cd ~/m/nova
+git co mcp/ocata
+git format-patch -1 HEAD
+scp 0001-Add-debug-logging-for-scheduler.patch o20-cfg:/tmp/
+#+END_SRC
+
+#+BEGIN_SRC sh :session shell-o20-cfg :results silent
+salt-cp ctl* /tmp/0001-Add-debug-logging-for-scheduler.patch /tmp/0001-Add-debug-logging-for-scheduler.patch
+salt ctl* cmd.run 'cd /usr/lib/python2.7/dist-packages/; patch -p1 --backup < /tmp/0001-Add-debug-logging-for-scheduler.patch'
+salt ctl* cmd.run 'systemctl restart nova-scheduler' --no-color
+salt ctl* cmd.run 'rm /tmp/scheduling' --no-color
+#+END_SRC
+
+*** Boot VMs
+
+#+BEGIN_SRC shell :session shell-o20-ctl01 :results silent
+openstack server list -c ID -f value | xargs openstack server delete
+flavor=f1; img=8466bbdb-7bd3-4528-a3a3-a3b1c9ecbb32; for i in {1..20}; do nova boot --flavor $flavor --image $img vm-$i; sleep 10; done
+#+END_SRC
+
+*** Check VM distribution.
+
+#+BEGIN_SRC sh :session shell-o20-ctl01 :results raw
+openstack server list -c Name -f value | wc -l
+openstack server list --long -c Host -f value | sort | uniq -c
+#+END_SRC
+
+20
+1 cmp0
+1 cmp1
+1 cmp10
+1 cmp11
+1 cmp12
+1 cmp13
+1 cmp14
+1 cmp15
+1 cmp16
+1 cmp17
+1 cmp18
+1 cmp19
+1 cmp2
+1 cmp3
+1 cmp4
+1 cmp5
+1 cmp6
+1 cmp7
+1 cmp8
+1 cmp9
+
+The same should be in the Placement service;
+
+#+BEGIN_SRC sh :session shell-o20-mysql
+select p.name, count(*) from allocations a join resource_providers p on a.resource_provider_id = p.id where resource_class_id = 0 group by 1;
+#+END_SRC
+
+#+begin_example
++-------------------------------------------------------+----------+
+| name                                                  | count(*) |
++-------------------------------------------------------+----------+
+| cmp0.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  |        1 |
+| cmp1.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  |        1 |
+| cmp10.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local |        1 |
+| cmp11.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local |        1 |
+| cmp12.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local |        1 |
+| cmp13.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local |        1 |
+| cmp14.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local |        1 |
+| cmp15.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local |        1 |
+| cmp16.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local |        1 |
+| cmp17.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local |        1 |
+| cmp18.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local |        1 |
+| cmp19.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local |        1 |
+| cmp2.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  |        1 |
+| cmp3.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  |        1 |
+| cmp4.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  |        1 |
+| cmp5.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  |        1 |
+| cmp6.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  |        1 |
+| cmp7.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  |        1 |
+| cmp8.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  |        1 |
+| cmp9.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  |        1 |
++-------------------------------------------------------+----------+
+20 rows in set (0.00 sec)
+#+end_example
+
+*** Analysis of what happened
+
+#+BEGIN_SRC sh :session shell-o20-cfg :results silent
+salt 'ctl*' cp.get_file_str /tmp/scheduling | grep '{' > /tmp/scheduling
+#+END_SRC
+
+#+BEGIN_SRC sh :session shell-default :results silent
+scp o20-cfg:/tmp/scheduling /tmp/scheduling
+cd /tmp
+rm /tmp/scheduling.sqlite
+create_db_from_json.py scheduling
+#+END_SRC
+
+See the number of requests and created time.
+
+#+BEGIN_SRC sqlite :db /tmp/scheduling.sqlite :results replace
+select server, req, host, created from scheduling where step = 'random' order by created;
+#+END_SRC
+
+#+RESULTS:
+| ctl02 | req-87cfd45a-d75f-497e-852d-902c009df4e4 | cmp15 | 2018-04-25T11:41:54.004968 |
+| ctl03 | req-3cc00bce-a93f-4f0c-b80d-066fe53abe5b | cmp5  | 2018-04-25T11:42:07.019612 |
+| ctl01 | req-653de11c-26bd-46ec-98e8-3f95b5c5ddc2 | cmp4  | 2018-04-25T11:42:19.890834 |
+| ctl02 | req-8128f5a2-765d-40df-9f61-01fcd1c01e80 | cmp19 | 2018-04-25T11:42:32.582589 |
+| ctl03 | req-23395836-daaa-434c-ad6a-45df8f7df83b | cmp3  | 2018-04-25T11:42:45.212269 |
+| ctl01 | req-7197ee44-7fff-4655-acae-07cbf6a80271 | cmp2  | 2018-04-25T11:42:57.847633 |
+| ctl02 | req-c1011535-a5bc-405b-9eea-160ed6746919 | cmp8  | 2018-04-25T11:43:10.497954 |
+| ctl03 | req-6a9613a6-95e2-4623-9e98-fede9d008275 | cmp11 | 2018-04-25T11:43:23.351091 |
+| ctl01 | req-e45e02dd-c589-4d3f-a0d0-ef319e9ba317 | cmp9  | 2018-04-25T11:43:36.236971 |
+| ctl02 | req-09f9104f-9243-4952-a012-827ac9cec1b0 | cmp12 | 2018-04-25T11:43:48.950534 |
+| ctl03 | req-0ac48913-03b0-4ce3-be02-f942c3966ad4 | cmp7  | 2018-04-25T11:44:01.669161 |
+| ctl01 | req-d770b31e-96a5-4d0e-bbc3-1ca4705910a2 | cmp0  | 2018-04-25T11:44:14.648089 |
+| ctl02 | req-3e7b83c6-6422-4994-b79a-3ab16ad7c27a | cmp17 | 2018-04-25T11:44:27.210015 |
+| ctl03 | req-166f846f-459e-45d3-a1cc-077d7804e9ea | cmp18 | 2018-04-25T11:44:39.780238 |
+| ctl01 | req-7fe5cc41-9e4e-4c3d-bdab-bb6f59daae79 | cmp14 | 2018-04-25T11:44:52.529928 |
+| ctl02 | req-d32e3cb2-4719-42f0-af40-a69f5261e80f | cmp1  | 2018-04-25T11:45:05.307609 |
+| ctl03 | req-b90c8c9e-3d8e-41aa-b2f2-04d710f80f20 | cmp16 | 2018-04-25T11:45:17.881671 |
+| ctl01 | req-060835ec-f759-46fd-bd2c-577cb44b047f | cmp10 | 2018-04-25T11:45:30.639395 |
+| ctl02 | req-e9a95a17-2ff9-4a0c-9186-a93286a57148 | cmp6  | 2018-04-25T11:45:43.316294 |
+| ctl03 | req-b8e73829-4871-4ab1-8a6e-a45bc14eea77 | cmp13 | 2018-04-25T11:45:56.000713 |
+
+See numbers of hosts for each step.
+
+#+BEGIN_SRC sqlite :db /tmp/scheduling.sqlite :results replace
+select step, filter, count(*) from scheduling where req = 'req-87cfd45a-d75f-497e-852d-902c009df4e4' group by 1, 2 order by created;
+#+END_SRC
+
+| load      |                                   | 20 |
+| filtering | DifferentHostFilter               | 20 |
+| filtering | SameHostFilter                    | 20 |
+| filtering | RetryFilter                       | 20 |
+| filtering | AvailabilityZoneFilter            | 20 |
+| filtering | RamFilter                         | 20 |
+| filtering | CoreFilter                        | 20 |
+| filtering | DiskFilter                        | 20 |
+| filtering | ComputeFilter                     | 20 |
+| filtering | ComputeCapabilitiesFilter         | 20 |
+| filtering | ImagePropertiesFilter             | 20 |
+| filtering | ServerGroupAntiAffinityFilter     | 20 |
+| filtering | ServerGroupAffinityFilter         | 20 |
+| filtering | PciPassthroughFilter              | 20 |
+| filtering | NUMATopologyFilter                | 20 |
+| filtering | AggregateInstanceExtraSpecsFilter | 20 |
+| weighing  |                                   | 20 |
+| subset    |                                   |  1 |
+| random    |                                   |  1 |
+
+See weights for the first request.
+
+#+BEGIN_SRC sqlite :db /tmp/scheduling.sqlite :results replace
+select host, weight, weights from scheduling where req = 'req-87cfd45a-d75f-497e-852d-902c009df4e4' and step = 'weighing' order by id;
+#+END_SRC
+
+| cmp15 |           2.0 | {u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}                                              |
+| cmp1  |           2.0 | {u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}                                              |
+| cmp5  | 1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp2  | 1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp8  | 1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp11 | 1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp19 | 1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp4  | 1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp9  | 1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp3  | 1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp12 | 1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp7  | 1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp0  | 1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp17 | 1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp18 | 1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp14 | 1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp16 | 1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp10 | 1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp6  | 1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp13 | 1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+
+See weights for the second request.
+
+#+BEGIN_SRC sqlite :db /tmp/scheduling.sqlite :results replace
+select host, weight, weights from scheduling where req = 'req-3cc00bce-a93f-4f0c-b80d-066fe53abe5b' and step = 'weighing' order by id;
+#+END_SRC
+
+| cmp5  |            2.0 | {u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}                                              |
+| cmp4  |            2.0 | {u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}                                              |
+| cmp0  |            2.0 | {u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}                                              |
+| cmp17 |            2.0 | {u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}                                              |
+| cmp18 |            2.0 | {u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}                                              |
+| cmp14 |            2.0 | {u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}                                              |
+| cmp1  |            2.0 | {u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}                                              |
+| cmp6  |            2.0 | {u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}                                              |
+| cmp2  |  1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp8  |  1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp11 |  1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp19 |  1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp9  |  1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp3  |  1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp12 |  1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp7  |  1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp16 |  1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp10 |  1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp13 |  1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp15 | 0.965734172132 | {u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 0.9657341721322447, u'IoOpsWeigher': 0.0, u'MetricsWeigher': 0.0}                               |
+
+#+BEGIN_SRC sqlite :db /tmp/scheduling.sqlite :results replace
+select host, weight, weights from scheduling where req = 'req-653de11c-26bd-46ec-98e8-3f95b5c5ddc2' and step = 'weighing' order by id;
+#+END_SRC
+
+See weights for the third request.
+
+| cmp4  |            2.0 | {u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}                                              |
+| cmp3  |            2.0 | {u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}                                              |
+| cmp0  |            2.0 | {u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}                                              |
+| cmp17 |            2.0 | {u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}                                              |
+| cmp18 |            2.0 | {u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}                                              |
+| cmp14 |            2.0 | {u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}                                              |
+| cmp1  |            2.0 | {u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}                                              |
+| cmp16 |            2.0 | {u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}                                              |
+| cmp10 |            2.0 | {u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}                                              |
+| cmp6  |            2.0 | {u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 2.0, u'IoOpsWeigher': 1.0, u'MetricsWeigher': 0.0}                                              |
+| cmp2  |  1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp8  |  1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp11 |  1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp19 |  1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp9  |  1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp12 |  1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp7  |  1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp13 |  1.97222222222 | {u'DiskWeigher': 0.9722222222222222, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 1.9722222222222223, u'IoOpsWeigher': 0.9722222222222222, u'MetricsWeigher': 0.0} |
+| cmp5  | 0.965734172132 | {u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 0.9657341721322447, u'IoOpsWeigher': 0.0, u'MetricsWeigher': 0.0}                               |
+| cmp15 | 0.965734172132 | {u'DiskWeigher': 1.0, u'ServerGroupSoftAntiAffinityWeigher': 0.0, u'ServerGroupSoftAffinityWeigher': 0.0, u'RAMWeigher': 0.9657341721322447, u'IoOpsWeigher': 0.0, u'MetricsWeigher': 0.0}                               |
