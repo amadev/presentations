@@ -171,10 +171,20 @@ wanted to be answered could be:
 - What host was chosen and where VM is actually placed?
 
 For that purpose, Mirantis implemented a patch that logs all required data
-in JSON-format into a file specified by *CONF/filter_scheduler/scheduler_debug_file*.
+in JSON-format into a file (/tmp/scheduling).
 
 After booting a VM, scheduler_debug_file could be uploaded into DB
 and analyzed with arbitrary SQL-queries.
+
+The following fields are available:
+- server - host where the scheduler works
+- step - phase of the scheduler process (load, filtering, weighing, subset, random)
+- host - hostname of a canditate for booting VM
+- weight - aggregated weight value (available on from weighing step only)
+- weights - detailed info about particular weighers after normalization
+- filter - name of the filter applied
+- req - request id
+- pid - process id
 
 ** Test on Mirantis lab
 
@@ -218,11 +228,9 @@ salt ctl* cmd.run 'systemctl restart nova-scheduler' --no-color
 
 *** Apply the patch for the scheduler
 
-Patch scheduler to log inner state.
+Patch scheduler to log inner state (https://review.fuel-infra.org/#/c/38384/).
 
 #+BEGIN_SRC sh :session shell-default :results silent
-cd ~/m/nova
-git co mcp/ocata
 git format-patch -1 HEAD
 scp 0001-Add-debug-logging-for-scheduler.patch o20-cfg:/tmp/
 #+END_SRC
