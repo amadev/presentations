@@ -37,21 +37,21 @@ links to python objects loaded into memory and could be used in
 In MCP the filter_scheduler is used with Nova default host manager. The following filters are
 enabled:
 
-| DifferentHostFilter               |
-| SameHostFilter                    |
-| RetryFilter                       |
-| AvailabilityZoneFilter            |
-| RamFilter                         |
-| CoreFilter                        |
-| DiskFilter                        |
-| ComputeFilter                     |
-| ComputeCapabilitiesFilter         |
-| ImagePropertiesFilter             |
-| ServerGroupAntiAffinityFilter     |
-| ServerGroupAffinityFilter         |
-| PciPassthroughFilter              |
-| NUMATopologyFilter                |
-| AggregateInstanceExtraSpecsFilter |
+- DifferentHostFilter
+- SameHostFilter
+- RetryFilter
+- AvailabilityZoneFilter
+- RamFilter
+- CoreFilter
+- DiskFilter
+- ComputeFilter
+- ComputeCapabilitiesFilter
+- ImagePropertiesFilter
+- ServerGroupAntiAffinityFilter
+- ServerGroupAffinityFilter
+- PciPassthroughFilter
+- NUMATopologyFilter
+- AggregateInstanceExtraSpecsFilter
 
 A good description could be found in filter scheduler Nova docs [fn:3].
 
@@ -69,22 +69,22 @@ The filter scheduler has several phases:
 3. Weigh hosts and sort host according to weights in a descending order.
    In Ocata, the following list of weighers is used:
 
-   | DiskWeigher                        |
-   | IoOpsWeigher                       |
-   | MetricsWeigher                     |
-   | RAMWeigher                         |
-   | ServerGroupSoftAffinityWeigher     |
-   | ServerGroupSoftAntiAffinityWeigher |
+   - DiskWeigher
+   - IoOpsWeigher
+   - MetricsWeigher
+   - RAMWeigher
+   - ServerGroupSoftAffinityWeigher
+   - ServerGroupSoftAntiAffinityWeigher
 
    Each weigher calculates weight for a list of host. After that those calculated normalized basing on
    min and max values. Final weight for host is calculated as sum of weights * weight_multiplier.
    weight_multiplier is specified in CONF. Default multipliers are the following:
 
-   | ram_weight_multiplier                |  1.0 |
-   | disk_weight_multiplier               |  1.0 |
-   | io_ops_weight_multiplier             | -1.0 |
-   | soft_affinity_weight_multiplier      |  1.0 |
-   | soft_anti_affinity_weight_multiplier |  1.0 |
+   - ram_weight_multiplier
+   - disk_weight_multiplier
+   - io_ops_weight_multiplier
+   - soft_affinity_weight_multiplier
+   - soft_anti_affinity_weight_multiplier
 
    A negative value means the logic is reversed, e.g. the more io_ops on a host
    the lower host is on the sorted list.
@@ -122,39 +122,40 @@ The following params could affect scheduling:
   hosts can be used to the hosts with particular availability_zone;
 - scheduler_hints - params for the create server request
 
-  | build_near_host_ip |
-  | cidr               |
-  | different_cell     |
-  | different_host     |
-  | group              |
-  | query              |
-  | same_host          |
-  | target_cell        |
+  - build_near_host_ip
+  - cidr
+  - different_cell
+  - different_host
+  - group
+  - query
+  - same_host
+  - target_cell
 
 - flavor extra_specs
 
-  | pci_passthrough:alias          |
-  | hw:cpu_policy                  |
-  | hw:cpu_thread_policy           |
-  | aggregate_instance_extra_specs |
-  | capabilities:*                 |
+  - pci_passthrough:alias
+  - hw:cpu_policy
+  - hw:cpu_thread_policy
+  - aggregate_instance_extra_specs
+  - capabilities:*
 
 - image properties
-  | hw:cpu_policy            |
-  | hw:cpu_thread_policy     |
-  | hw_architecture          |
-  | img_hv_type              |
-  | hw_vm_mode               |
-  | img_hv_requested_version |
+
+  - hw:cpu_policy
+  - hw:cpu_thread_policy
+  - hw_architecture
+  - img_hv_type
+  - hw_vm_mode
+  - img_hv_requested_version
 
 - Placement allocation candidate request options.
   Since Pike+ it is possible to specify params for the Placement request with
   flavor extra specs:
 
-  | resources:$RESOURCE_CLASS: $AMOUNT   |
-  | resources$N:$RESOURCE_CLASS: $AMOUNT |
-  | trait:$TRAIT_NAME: required          |
-  | trait$N:$TRAIT_NAME: required        |
+  - resources:$RESOURCE_CLASS:
+  - resources$N:$RESOURCE_CLASS:
+  - trait:$TRAIT_NAME:
+  - trait$N:$TRAIT_NAME:
 
 ** Debug scheduling
 
