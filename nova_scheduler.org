@@ -83,11 +83,11 @@ The filter scheduler has several phases:
    min and max values. Final weight for host is calculated as sum of weights * weight_multiplier.
    weight_multiplier is specified in CONF. Default multipliers are the following:
 
-   - ram_weight_multiplier
-   - disk_weight_multiplier
-   - io_ops_weight_multiplier
-   - soft_affinity_weight_multiplier
-   - soft_anti_affinity_weight_multiplier
+   - ram_weight_multiplier: 1.0
+   - disk_weight_multiplier: 1.0
+   - io_ops_weight_multiplier: -1.0
+   - soft_affinity_weight_multiplier: 1.0
+   - soft_anti_affinity_weight_multiplier: 1.0
 
    A negative value means the logic is reversed, e.g. the more io_ops on a host
    the lower host is on the sorted list.
