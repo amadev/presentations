@@ -186,9 +186,7 @@ There is an env with 20 compute nodes.
 openstack hypervisor list
 #+END_SRC
 
-+----+-------------------------------------------------------+-----------------+---------------+-------+
 | ID | Hypervisor Hostname                                   | Hypervisor Type | Host IP       | State |
-+----+-------------------------------------------------------+-----------------+---------------+-------+
 |  1 | cmp13.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local | QEMU            | 172.16.10.96  | up    |
 |  4 | cmp17.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local | QEMU            | 172.16.10.112 | up    |
 |  7 | cmp12.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local | QEMU            | 172.16.10.108 | up    |
@@ -209,7 +207,6 @@ openstack hypervisor list
 | 52 | cmp5.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  | QEMU            | 172.16.10.97  | up    |
 | 55 | cmp11.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local | QEMU            | 172.16.10.98  | up    |
 | 58 | cmp7.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  | QEMU            | 172.16.10.95  | up    |
-+----+-------------------------------------------------------+-----------------+---------------+-------+
 
 Set scheduler_subset_size to 1.
 
@@ -280,10 +277,7 @@ The same should be in the Placement service.
 select p.name, count(*) from allocations a join resource_providers p on a.resource_provider_id = p.id where resource_class_id = 0 group by 1;
 #+END_SRC
 
-#+begin_example
-+-------------------------------------------------------+----------+
 | name                                                  | count(*) |
-+-------------------------------------------------------+----------+
 | cmp0.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  |        1 |
 | cmp1.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  |        1 |
 | cmp10.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local |        1 |
@@ -304,9 +298,7 @@ select p.name, count(*) from allocations a join resource_providers p on a.resour
 | cmp7.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  |        1 |
 | cmp8.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  |        1 |
 | cmp9.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  |        1 |
-+-------------------------------------------------------+----------+
 20 rows in set (0.00 sec)
-#+end_example
 
 *** Analysis of what happened
 
@@ -465,3 +457,5 @@ See weights for the third request.
 [fn:4] https://developer.openstack.org/api-ref/compute/#create-server
 
 [fn:5] https://docs.openstack.org/nova/latest/admin/configuration/schedulers.html
+
+[fn:6] https://github.com/amadev/presentations/blob/master/nova_scheduler.org
