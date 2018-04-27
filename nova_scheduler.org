@@ -7,6 +7,9 @@
 #+OPTIONS: \n:t
 
 * Nova Scheduler
+  :PROPERTIES:
+  :header-args: :eval never-export
+  :END:
 
 ** Intro
 
