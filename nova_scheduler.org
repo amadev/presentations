@@ -63,8 +63,7 @@ A good description could be found in filter scheduler Nova docs [fn:3].
 The filter scheduler has several phases:
 
 1. Get all available compute nodes. Depending on Nova release it either
-   could be a request from DB or the Placement service. In Ocata, Placement is in reporting mode
-   only it means data are sent to Placement but not used for scheduling. In Pike+ release Placement
+   could be a request from DB or the Placement service. In Ocata+ release Placement
    is a part of scheduling to get hosts and put allocations.
 2. Filter gotten hosts. The list of hosts go through each filter in the
    order specified in *CONF/filter_scheduler/enabled_filters*. For each host a filter returns either
