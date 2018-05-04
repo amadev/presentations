@@ -178,7 +178,7 @@ and analyzed with arbitrary SQL-queries.
 The following fields are available:
 - server - host where the scheduler works
 - step - phase of the scheduler process (load, filtering, weighing, subset, random)
-- host - hostname of a canditate for booting VM
+- host - hostname of a candidate for booting VM
 - weight - aggregated weight value (available on from weighing step only)
 - weights - detailed info about particular weighers after normalization
 - filter - name of the filter applied
