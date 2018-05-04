@@ -218,6 +218,27 @@ openstack hypervisor list
 | 55 | cmp11.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local | QEMU            | 172.16.10.98  | up    |
 | 58 | cmp7.vsaienko-deploy-heat-os-ha-ovs-440.bud-mk.local  | QEMU            | 172.16.10.95  | up    |
 
+Nova-scheduler version corresponds to Ocata release.
+
+#+BEGIN_SRC shell :session shell-o20-ctl01 :results replace org
+apt policy nova-scheduler
+#+END_SRC
+
+#+BEGIN_SRC org
+nova-scheduler:
+  Installed: 2:15.1.0-2~u16.04+mcp60
+  Candidate: 2:15.1.0-3~u16.04+mcp68
+  Version table:
+     2:15.1.0-3~u16.04+mcp68 1100
+       1100 http://mirror.fuel-infra.org/mcp-repos/ocata/xenial ocata/main amd64 Packages
+ ,*** 2:15.1.0-2~u16.04+mcp60 100
+        100 /var/lib/dpkg/status
+     2:13.1.4-0ubuntu4.2 500
+        500 http://archive.ubuntu.com/ubuntu xenial-updates/main amd64 Packages
+     2:13.0.0-0ubuntu2 500
+        500 http://archive.ubuntu.com/ubuntu xenial/main amd64 Packages
+#+END_SRC
+
 Set scheduler_subset_size to 1.
 
 #+BEGIN_SRC sh :session shell-o20-cfg :results silent
