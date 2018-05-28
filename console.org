@@ -1,0 +1,156 @@
+#+TITLE: OpenStack Virtual Machine Access
+#+DATE: 2018-05-18
+#+CATEGORY: blog
+#+AUTHOR: Andrey Volkov
+#+PROPERTY: LANGUAGE en
+#+PROPERTY: SUMMARY hello, this is the description
+#+PROPERTY: SLUG openstack-virtual-machine-access
+#+PROPERTY: MODIFIED [2018-05-25]
+#+PROPERTY: TAGS openstack
+#+PROPERTY: SAVE_AS openstack-virtual-machine-access.html
+
+* OpenStack VM remote access
+  :PROPERTIES:
+  :header-args: :eval never-export
+  :END:
+
+Remote access to VM could be done via:
+- VNC (Virtual Network Computer)
+- SPICE (Simple Protocol for Independent Computing Environments) - RedHat origin protocol
+  has audio support, usb redirection, copy-paste between a VM and a host.
+Those options are determined by QEMU support.
+
+** Direct access
+
+If there is ssh access to the compute node that vm is running on the
+easiet way to use VNC or SPICE client is:
+
+i=4b8fafd5-f679-4532-b597-15d52d039a15
+
+virt-viewer --connect qemu+ssh://devstack/system $i
+
+** With OpenStack
+
+We need to get a web url first:
+
+openstack console url show $i --novnc
+
+After that we can open url in a browser and use console.
+http://172.18.237.203:6080/vnc_auto.html?token=3463bdf7-27d4-4359-b2ad-23f7b63eb42c
+
+Internally, it goes through nova-novncproxy server to QEMU processed
+VNC server. novncproxy checks token valid on the way.
+
+** Secure connection between novncproxy and QEMU
+  :PROPERTIES:
+  :header-args: :session shell-devstack2 :results silent
+  :END:
+
+Generate keys and certificates.
+
+Prepare dir.
+
+#+BEGIN_SRC sh
+rm -rf ~/certs
+mkdir ~/certs
+cd ~/certs
+#+END_SRC
+
+#+BEGIN_SRC sh
+sudo apt install gnutls-bin crudini -y
+#+END_SRC
+
+Config for self-signed CA certificate.
+
+#+BEGIN_SRC sh
+cat << 'EOF' > ca.info
+cn = cert-devstack
+ca
+cert_signing_key
+EOF
+#+END_SRC
+
+#+BEGIN_SRC sh
+f=server.info
+echo "organization = Devstack LTD" > $f
+echo "cn = `hostname`" >> $f
+echo "dns_name = `hostname -f`" >> $f
+echo "dns_name = `hostname -s`" >> $f
+for ip in `hostname -I`; do echo "ip_address = $ip" >> $f;  done
+echo "tls_www_server" >> $f
+echo "encryption_key" >> $f
+echo "signing_key" >> $f
+#+END_SRC
+
+#+BEGIN_SRC sh
+f=client.info
+echo "organization = Devstack LTD" > $f
+echo "cn = `hostname`" >> $f
+echo "dns_name = `hostname -f`" >> $f
+echo "dns_name = `hostname -s`" >> $f
+for ip in `hostname -I`; do echo "ip_address = $ip" >> $f;  done
+echo "tls_www_client" >> $f
+echo "encryption_key" >> $f
+echo "signing_key" >> $f
+#+END_SRC
+
+#+BEGIN_SRC sh
+certtool --generate-privkey > ca-key.pem
+certtool --generate-self-signed --load-privkey ca-key.pem --template ca.info --outfile ca-cert.pem
+certtool --generate-privkey > client-key.pem
+certtool --generate-privkey > server-key.pem
+certtool --generate-certificate --load-privkey server-key.pem --load-ca-certificate ca-cert.pem --load-ca-privkey ca-key.pem --template server.info --outfile server-cert.pem
+certtool --generate-certificate --load-privkey client-key.pem --load-ca-certificate ca-cert.pem --load-ca-privkey ca-key.pem --template client.info --outfile client-cert.pem
+#+END_SRC
+
+Put certificates at right places.
+
+#+BEGIN_SRC sh
+sudo su
+rm -rf /etc/pki/libvirt-vnc/
+rm -rf /etc/pki/nova-novncproxy/
+mkdir /etc/pki/libvirt-vnc/
+mkdir /etc/pki/nova-novncproxy/
+
+cp server-cert.pem /etc/pki/libvirt-vnc/server-cert.pem
+cp server-key.pem /etc/pki/libvirt-vnc/server-key.pem
+cp ca-cert.pem /etc/pki/libvirt-vnc/ca-cert.pem
+cp ca-cert.pem /etc/pki/CA/ca-cert.pem
+
+cp client-key.pem /etc/pki/nova-novncproxy/client-key.pem
+cp client-cert.pem /etc/pki/nova-novncproxy/client-cert.pem
+cp ca-cert.pem /etc/pki/nova-novncproxy/ca-cert.pem
+#+END_SRC
+
+Update libvirt conf.
+
+#+BEGIN_SRC sh
+echo 'vnc_tls=1' >> /etc/libvirt/qemu.conf
+echo 'vnc_tls_x509_verify=1' >> /etc/libvirt/qemu.conf
+echo 'vnc_tls_x509_cert_dir="/etc/pki/libvirt-vnc"' >> /etc/libvirt/qemu.conf
+#+END_SRC
+
+#+BEGIN_SRC sh
+systemctl restart libvirtd
+#+END_SRC
+
+Update nova conf.
+
+#+BEGIN_SRC sh
+crudini --set /etc/nova/nova_cell1.conf vnc auth_schemes vencrypt
+crudini --set /etc/nova/nova_cell1.conf vnc vencrypt_client_key /etc/pki/nova-novncproxy/client-key.pem
+crudini --set /etc/nova/nova_cell1.conf vnc vencrypt_client_cert /etc/pki/nova-novncproxy/client-cert.pem
+crudini --set /etc/nova/nova_cell1.conf vnc vencrypt_ca_certs /etc/pki/nova-novncproxy/ca-cert.pem
+#+END_SRC
+
+#+BEGIN_SRC sh
+systemctl restart devstack@n-novnc-cell1
+#+END_SRC
+
+** Footnotes
+
+[1] https://docs.openstack.org/nova/queens/admin/remote-console-access.html
+[2] https://www.berrange.com/posts/2016/04/01/improving-qemu-security-part-2-generic-tls-support/#series
+[3] https://blog.felipe-alfaro.com/2014/05/13/html5-spice-console-in-openstack/
+[4] http://www.linux-kvm.org/page/SPICE
+[5] https://github.com/kubevirt/kubevirt/issues/298
