@@ -1,0 +1,186 @@
+cfg-log
+
+root@cfg01:~# wget http://eu.mirror.infra.mirantis.net/mcp/pike/pool/main/n/nova/python-nova_16.1.3-1~u16.04%2bmcp69_all.deb
+root@cfg01:~# wget http://eu.mirror.infra.mirantis.net/mcp/pike/pool/main/n/nova/nova-common_16.1.3-1~u16.04%2bmcp69_all.deb
+root@cfg01:~# wget http://eu.mirror.infra.mirantis.net/mcp/pike/pool/main/n/nova/nova-compute_16.1.3-1~u16.04%2bmcp69_all.deb
+root@cfg01:~# wget http://eu.mirror.infra.mirantis.net/mcp/pike/pool/main/n/nova/nova-compute-kvm_16.1.3-1~u16.04%2bmcp69_all.deb
+root@cfg01:~# salt-cp 'cmp*' *.deb /tmp/
+root@cfg01:~# salt cmp* cmd.shell 'dpkg -i /tmp/*.deb'
+root@cfg01:~# salt cmp* cmd.shell 'apt-get install  python-defusedxml'
+root@cfg01:~# salt cmp* cmd.shell 'systemctl restart nova-compute'
+
+ctl01-log, mysql-log
+
+root@ctl01:~# openstack server list -c ID -f value | xargs openstack server delete
+root@ctl01:~# openstack port list | grep sriov | cut -d' ' -f 2 | xargs openstack port delete
+root@ctl01:~# port="sriov-port-1"
+vm="vm1-sriov"
+host="cmp001"
+net_id=`neutron net-show test | grep "\ id\ " | awk '{ print $4 }'`
+port_id=`neutron port-create $net_id --name $port --binding:vnic_type direct | grep "\ id\ " | awk '{ print $4 }'`
+openstack server create --flavor m1.extra_tiny --image xenial --nic port-id=$port_id $vm --availability-zone nova:$host --user-data user-data.txt
+
+root@ctl01:~# root@ctl01:~# root@ctl01:~# neutron CLI is deprecated and will be removed in the future. Use openstack CLI instead.
+root@ctl01:~# neutron CLI is deprecated and will be removed in the future. Use openstack CLI instead.
+root@ctl01:~#
++-------------------------------------+------------------------------------------------------+
+| Field                               | Value                                                |
++-------------------------------------+------------------------------------------------------+
+| OS-DCF:diskConfig                   | MANUAL                                               |
+| OS-EXT-AZ:availability_zone         | nova                                                 |
+| OS-EXT-SRV-ATTR:host                | None                                                 |
+| OS-EXT-SRV-ATTR:hypervisor_hostname | None                                                 |
+| OS-EXT-SRV-ATTR:instance_name       |                                                      |
+| OS-EXT-STS:power_state              | NOSTATE                                              |
+| OS-EXT-STS:task_state               | scheduling                                           |
+| OS-EXT-STS:vm_state                 | building                                             |
+| OS-SRV-USG:launched_at              | None                                                 |
+| OS-SRV-USG:terminated_at            | None                                                 |
+| accessIPv4                          |                                                      |
+| accessIPv6                          |                                                      |
+| addresses                           |                                                      |
+| adminPass                           | fHvXZqn7iMPs                                         |
+| config_drive                        |                                                      |
+| created                             | 2018-05-31T10:19:46Z                                 |
+| flavor                              | m1.extra_tiny (483db64d-e160-454c-81cb-29fa266a5c56) |
+| hostId                              |                                                      |
+| id                                  | 76439b61-24f5-4d06-8bb6-028d7ea7fb55                 |
+| image                               | xenial (d23a15a6-4a99-4c18-ba8f-19fdab29f031)        |
+| key_name                            | None                                                 |
+| name                                | vm1-sriov                                            |
+| progress                            | 0                                                    |
+| project_id                          | b7ee57632cc5476abaf162f1ad4d58f0                     |
+| properties                          |                                                      |
+| security_groups                     | name='default'                                       |
+| status                              | BUILD                                                |
+| updated                             | 2018-05-31T10:19:46Z                                 |
+| user_id                             | 603b43eff439448aadef8182231b4ed5                     |
+| volumes_attached                    |                                                      |
++-------------------------------------+------------------------------------------------------+
+root@ctl01:~# root@ctl01:~# root@ctl01:~#
+root@ctl01:~#
+root@ctl01:~#
+root@ctl01:~# port="sriov-port-2"
+vm="vm2-sriov"
+host="cmp002"
+net_id=`neutron net-show test | grep "\ id\ " | awk '{ print $4 }'`
+port_id=`neutron port-create $net_id --name $port --binding:vnic_type direct | grep "\ id\ " | awk '{ print $4 }'`
+openstack server create --flavor m1.extra_tiny --image xenial --nic port-id=$port_id $vm --availability-zone nova:$host --user-data user-data.txt
+
+root@ctl01:~# root@ctl01:~# root@ctl01:~# neutron CLI is deprecated and will be removed in the future. Use openstack CLI instead.
+root@ctl01:~# neutron CLI is deprecated and will be removed in the future. Use openstack CLI instead.
+root@ctl01:~#
++-------------------------------------+------------------------------------------------------+
+| Field                               | Value                                                |
++-------------------------------------+------------------------------------------------------+
+| OS-DCF:diskConfig                   | MANUAL                                               |
+| OS-EXT-AZ:availability_zone         | nova                                                 |
+| OS-EXT-SRV-ATTR:host                | None                                                 |
+| OS-EXT-SRV-ATTR:hypervisor_hostname | None                                                 |
+| OS-EXT-SRV-ATTR:instance_name       |                                                      |
+| OS-EXT-STS:power_state              | NOSTATE                                              |
+| OS-EXT-STS:task_state               | scheduling                                           |
+| OS-EXT-STS:vm_state                 | building                                             |
+| OS-SRV-USG:launched_at              | None                                                 |
+| OS-SRV-USG:terminated_at            | None                                                 |
+| accessIPv4                          |                                                      |
+| accessIPv6                          |                                                      |
+| addresses                           |                                                      |
+| adminPass                           | xr2vGfESf9hw                                         |
+| config_drive                        |                                                      |
+| created                             | 2018-05-31T10:20:19Z                                 |
+| flavor                              | m1.extra_tiny (483db64d-e160-454c-81cb-29fa266a5c56) |
+| hostId                              |                                                      |
+| id                                  | fc6438b9-9306-4ed3-b60a-5c38a8b35505                 |
+| image                               | xenial (d23a15a6-4a99-4c18-ba8f-19fdab29f031)        |
+| key_name                            | None                                                 |
+| name                                | vm2-sriov                                            |
+| progress                            | 0                                                    |
+| project_id                          | b7ee57632cc5476abaf162f1ad4d58f0                     |
+| properties                          |                                                      |
+| security_groups                     | name='default'                                       |
+| status                              | BUILD                                                |
+| updated                             | 2018-05-31T10:20:19Z                                 |
+| user_id                             | 603b43eff439448aadef8182231b4ed5                     |
+| volumes_attached                    |                                                      |
++-------------------------------------+------------------------------------------------------+
+root@ctl01:~# root@ctl01:~# root@ctl01:~#
+
+root@ctl01:~#
+root@ctl01:~#
+root@ctl01:~#
+root@ctl01:~#
+root@ctl01:~#
+root@ctl01:~# nova list
++--------------------------------------+-----------+--------+------------+-------------+-------------------+
+| ID                                   | Name      | Status | Task State | Power State | Networks          |
++--------------------------------------+-----------+--------+------------+-------------+-------------------+
+| 76439b61-24f5-4d06-8bb6-028d7ea7fb55 | vm1-sriov | ACTIVE | -          | Running     | test=192.168.1.3  |
+| fc6438b9-9306-4ed3-b60a-5c38a8b35505 | vm2-sriov | ACTIVE | -          | Running     | test=192.168.1.11 |
++--------------------------------------+-----------+--------+------------+-------------+-------------------+
+root@ctl01:~#
+
+# mysql> select p.instance_uuid, p.dev_id, c.host from pci_devices p join compute_nodes c on p.compute_node_id = c.id where status = 'allocated';
+# select p.instance_uuid, p.dev_id, c.host from pci_devices p join compute_nodes c on p.compute_node_id = c.id where status = 'allocated';
+# +--------------------------------------+------------------+--------+
+# | instance_uuid                        | dev_id           | host   |
+# +--------------------------------------+------------------+--------+
+# | 76439b61-24f5-4d06-8bb6-028d7ea7fb55 | pci_0000_03_12_3 | cmp001 |
+# | fc6438b9-9306-4ed3-b60a-5c38a8b35505 | pci_0000_03_12_3 | cmp002 |
+# +--------------------------------------+------------------+--------+
+# 2 rows in set (0.00 sec)
+
+root@ctl01:~#
+root@ctl01:~# service=$(nova service-list | grep cmp002 | grep nova-compute | awk '{print $2}')
+root@ctl01:~#
+root@ctl01:~#
+root@ctl01:~# nova service-force-down $service
++--------------------------------------+--------+--------------+-------------+
+| ID                                   | Host   | Binary       | Forced down |
++--------------------------------------+--------+--------------+-------------+
+| 6a5b8cb0-a7ce-4151-830f-6927eb42e69d | cmp002 | nova-compute | True        |
++--------------------------------------+--------+--------------+-------------+
+root@ctl01:~#
+root@ctl01:~#
+root@ctl01:~#
+root@ctl01:~# nova evacuate $vm
+root@ctl01:~#
+root@ctl01:~#
+root@ctl01:~#
+root@ctl01:~# nova list
++--------------------------------------+-----------+--------+------------+-------------+-------------------+
+| ID                                   | Name      | Status | Task State | Power State | Networks          |
++--------------------------------------+-----------+--------+------------+-------------+-------------------+
+| 76439b61-24f5-4d06-8bb6-028d7ea7fb55 | vm1-sriov | ACTIVE | -          | Running     | test=192.168.1.3  |
+| fc6438b9-9306-4ed3-b60a-5c38a8b35505 | vm2-sriov | ACTIVE | -          | Running     | test=192.168.1.11 |
++--------------------------------------+-----------+--------+------------+-------------+-------------------+
+root@ctl01:~# nova service-force-down $service --unset
++--------------------------------------+--------+--------------+-------------+
+| ID                                   | Host   | Binary       | Forced down |
++--------------------------------------+--------+--------------+-------------+
+| 6a5b8cb0-a7ce-4151-830f-6927eb42e69d | cmp002 | nova-compute | False       |
++--------------------------------------+--------+--------------+-------------+
+root@ctl01:~#
+
+# mysql> select p.instance_uuid, p.dev_id, c.host from pci_devices p join compute_nodes c on p.compute_node_id = c.id where status = 'allocated';
+# select p.instance_uuid, p.dev_id, c.host from pci_devices p join compute_nodes c on p.compute_node_id = c.id where status = 'allocated';
+# +--------------------------------------+------------------+--------+
+# | instance_uuid                        | dev_id           | host   |
+# +--------------------------------------+------------------+--------+
+# | fc6438b9-9306-4ed3-b60a-5c38a8b35505 | pci_0000_03_12_1 | cmp001 |
+# | 76439b61-24f5-4d06-8bb6-028d7ea7fb55 | pci_0000_03_12_3 | cmp001 |
+# | fc6438b9-9306-4ed3-b60a-5c38a8b35505 | pci_0000_03_12_3 | cmp002 |
+# +--------------------------------------+------------------+--------+
+# 3 rows in set (0.01 sec)
+
+# After nova-compute restarted PCI will be released
+
+# mysql> select p.instance_uuid, p.dev_id, c.host from pci_devices p join compute_nodes c on p.compute_node_id = c.id where status = 'allocated';
+# select p.instance_uuid, p.dev_id, c.host from pci_devices p join compute_nodes c on p.compute_node_id = c.id where status = 'allocated';
+# +--------------------------------------+------------------+--------+
+# | instance_uuid                        | dev_id           | host   |
+# +--------------------------------------+------------------+--------+
+# | fc6438b9-9306-4ed3-b60a-5c38a8b35505 | pci_0000_03_12_1 | cmp001 |
+# | 76439b61-24f5-4d06-8bb6-028d7ea7fb55 | pci_0000_03_12_3 | cmp001 |
+# +--------------------------------------+------------------+--------+
+# 2 rows in set (0.00 sec)
